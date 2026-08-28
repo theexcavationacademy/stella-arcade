@@ -2,28 +2,20 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>Soccer Duel</title>
 <style>
 /* ========== TWEAK ME ========== */
 :root{
-  --grass1:#2f7d3a;
-  --grass2:#2a7135;
-  --line:#eaf5ec;
-  --p1:#ff7a2f;      /* Stella - flame orange */
-  --p2:#39a7ff;      /* Dad - blue            */
-  --ui:#0e1712;
-  --text:#eafaf0;
-  --dim:#8fb39d;
+  --grass1:#2f7d3a; --grass2:#2a7135; --line:#eaf5ec;
+  --p1:#ff7a2f;      /* your team   */
+  --p2:#39a7ff;      /* their team  */
+  --ui:#0e1712; --text:#eafaf0; --dim:#8fb39d; --gold:#ffd93d;
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 html,body{height:100%;overscroll-behavior:none}
-body{
-  background:#08120c;color:var(--text);
-  font-family:'Trebuchet MS',system-ui,sans-serif;
-  display:flex;flex-direction:column;align-items:center;overflow:hidden;touch-action:none;
-  user-select:none;
-}
+body{background:#08120c;color:var(--text);font-family:'Trebuchet MS',system-ui,sans-serif;
+  display:flex;flex-direction:column;align-items:center;overflow:hidden;touch-action:none;user-select:none}
 a{color:#7fe0a5;text-decoration:none}
 header{width:100%;display:flex;align-items:center;gap:8px;padding:6px 10px;flex:0 0 auto;font-size:13px;
   position:relative;z-index:20;background:#08120c}
@@ -32,48 +24,51 @@ header .sp{flex:1}
 .btn{background:#12271a;border:1px solid #22452e;color:var(--text);border-radius:9px;
   padding:6px 11px;font-size:13px;cursor:pointer;font-family:inherit}
 .btn:active{background:#1d3d28}
+.btn.muted{opacity:.45;text-decoration:line-through}
 #stage{flex:1;width:100%;position:relative;min-height:0}
 canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
 #hint{position:absolute;left:0;right:0;bottom:8px;text-align:center;font-size:12px;color:var(--dim);pointer-events:none}
+body.touch #hint{display:none}
 
-/* menu */
 #menu{position:fixed;inset:0;background:linear-gradient(160deg,#0b1f14,#08120c);z-index:10;
-  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;
-  padding:24px;z-index:10;text-align:center;overflow:auto}
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;
+  padding:24px;text-align:center;overflow:auto}
 #menu h2{font-size:26px;letter-spacing:2px;color:#bff0cf}
-#menu p{color:var(--dim);font-size:13px;max-width:340px;line-height:1.6}
-.big{background:#3ada78;color:#04180c;border:none;font-weight:bold;padding:15px 22px;
-  font-size:16px;border-radius:14px;font-family:inherit;cursor:pointer;min-width:250px}
+#menu p{color:var(--dim);font-size:13px;max-width:360px;line-height:1.6}
+.big{background:#3ada78;color:#04180c;border:none;font-weight:bold;padding:14px 20px;font-size:16px;
+  border-radius:14px;font-family:inherit;cursor:pointer;min-width:260px}
 .big.alt{background:#12271a;color:var(--text);border:1px solid #2a5a3a}
+.row{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+.pill{background:#12271a;border:2px solid #2a5a3a;color:var(--text);border-radius:22px;
+  padding:9px 20px;font-size:15px;font-family:inherit;cursor:pointer}
+.pill.on{background:var(--gold);color:#20160a;border-color:var(--gold);font-weight:bold}
 #codeBox{display:none;flex-direction:column;gap:10px;align-items:center}
-#code{font-size:44px;letter-spacing:10px;font-weight:bold;color:#ffd93d;
+#code{font-size:42px;letter-spacing:10px;font-weight:bold;color:var(--gold);
   background:#0e2116;border:1px solid #2a5a3a;border-radius:14px;padding:12px 8px 12px 18px;min-width:250px}
-#joinInput{font-size:28px;letter-spacing:8px;text-align:center;text-transform:uppercase;
-  background:#0e2116;border:1px solid #2a5a3a;color:var(--text);border-radius:14px;
-  padding:12px;width:250px;font-family:inherit}
-#netMsg{font-size:13px;color:#ffd93d;min-height:18px}
+#joinInput{font-size:26px;letter-spacing:8px;text-align:center;text-transform:uppercase;
+  background:#0e2116;border:1px solid #2a5a3a;color:var(--text);border-radius:14px;padding:12px;width:250px;font-family:inherit}
+#netMsg{font-size:13px;color:var(--gold);min-height:18px;max-width:330px;line-height:1.5}
 
-/* touch controls */
-.stick{position:absolute;width:150px;height:150px;border-radius:50%;
-  border:2px solid rgba(255,255,255,.16);background:rgba(255,255,255,.05);display:none;
-  touch-action:none}
-.stick .knob{position:absolute;width:60px;height:60px;border-radius:50%;
-  background:rgba(255,255,255,.30);left:45px;top:45px}
-.dash{position:absolute;width:82px;height:82px;border-radius:50%;display:none;
-  border:2px solid rgba(255,255,255,.2);background:rgba(255,217,61,.16);
-  color:#ffd93d;font-size:13px;font-weight:bold;font-family:inherit;
-  align-items:center;justify-content:center;letter-spacing:1px}
-.dash:active{background:rgba(255,217,61,.5)}
-body.touch .stick,body.touch .dash{display:flex}
-#stick1{left:14px;bottom:14px} #dash1{left:176px;bottom:32px}
-#stick2{right:14px;bottom:14px} #dash2{right:176px;bottom:32px}
-body.solo #stick2,body.solo #dash2{display:none}
-
-#result{position:fixed;inset:0;background:rgba(8,18,12,.94);display:none;
-  flex-direction:column;align-items:center;justify-content:center;gap:16px;z-index:11;text-align:center;padding:24px}
+.stick{position:absolute;width:132px;height:132px;border-radius:50%;
+  border:2px solid rgba(255,255,255,.16);background:rgba(255,255,255,.05);display:none;touch-action:none}
+.stick .knob{position:absolute;width:56px;height:56px;border-radius:50%;
+  background:rgba(255,255,255,.32);left:38px;top:38px}
+.act{position:absolute;border-radius:50%;display:none;border:2px solid rgba(255,255,255,.22);
+  color:#eafaf0;font-weight:bold;font-family:inherit;align-items:center;justify-content:center;letter-spacing:1px}
+.act:active{filter:brightness(1.6)}
+#stick1{left:14px;bottom:14px}
+#btnPass{right:120px;bottom:34px;width:78px;height:78px;font-size:13px;background:rgba(57,167,255,.28)}
+#btnShoot{right:22px;bottom:112px;width:88px;height:88px;font-size:14px;background:rgba(255,217,61,.26);color:var(--gold)}
+body.touch .stick,body.touch .act{display:flex}
+@media (max-width:520px){
+  .stick{width:118px;height:118px}
+  .stick .knob{width:50px;height:50px;left:32px;top:32px}
+  #btnPass{width:70px;height:70px;right:104px;bottom:30px}
+  #btnShoot{width:80px;height:80px;right:18px;bottom:100px}
+}
+#result{position:fixed;inset:0;background:rgba(8,18,12,.94);display:none;flex-direction:column;
+  align-items:center;justify-content:center;gap:16px;z-index:11;text-align:center;padding:24px}
 #result h2{font-size:34px}
-
-.btn.muted,button.muted{opacity:.45;text-decoration:line-through}
 </style>
 </head>
 <body>
@@ -82,7 +77,7 @@ body.solo #stick2,body.solo #dash2{display:none}
   <a class="btn" href="../index.html">&#8592; Arcade</a>
   <h1>Soccer Duel</h1>
   <span class="sp"></span>
-  <span id="conn" style="color:var(--dim)"></span>
+  <span id="conn" style="color:var(--dim);font-size:11px"></span>
   <button class="btn" id="sndBtn" title="Sound on/off">&#9834; ON</button>
   <button class="btn" id="menuBtn">Menu</button>
 </header>
@@ -90,19 +85,23 @@ body.solo #stick2,body.solo #dash2{display:none}
 <div id="stage">
   <canvas id="cv"></canvas>
   <div class="stick" id="stick1"><div class="knob"></div></div>
-  <div class="dash" id="dash1">DASH</div>
-  <div class="stick" id="stick2"><div class="knob"></div></div>
-  <div class="dash" id="dash2">DASH</div>
+  <button class="act" id="btnPass">PASS</button>
+  <button class="act" id="btnShoot">SHOOT</button>
   <div id="hint"></div>
 </div>
 
 <div id="menu">
   <h2>Soccer Duel</h2>
-  <p>First to 5 goals. Hold DASH to charge, let go to blast the ball.</p>
-  <button class="big" id="btnLocal">Two players, one screen</button>
+  <p>You control whoever is nearest the ball. Run into the ball to take it,
+     PASS to the player the arrow is pointing at, SHOOT to have a go.</p>
+  <div class="row">
+    <button class="pill on" data-size="1">1 v 1</button>
+    <button class="pill" data-size="3">3 v 3</button>
+  </div>
+  <button class="big" id="btnSolo">Play the computer</button>
+  <button class="big alt" id="btnLocal">Two players, one screen</button>
   <button class="big alt" id="btnHost">Host a game (phone to phone)</button>
   <button class="big alt" id="btnJoin">Join a game</button>
-  <button class="big alt" id="btnSolo">Play the computer</button>
   <div id="codeBox">
     <div id="code">----</div>
     <div id="netMsg"></div>
@@ -259,393 +258,6 @@ const SFX = (function(){
   return api;
 })();
 
-/* ============================================================
-   SOCCER DUEL  -  Stella vs Dad
-   Modes: same screen, phone-to-phone online, or vs the computer.
-   Physics is simple circles bouncing off each other. Honest and
-   easy to read - poke at the numbers below and see what happens.
-   ============================================================ */
-
-/* ---------- TWEAK ME ---------- */
-const W = 900, H = 540;        // pitch size in game units
-const GOAL_H = 170;            // how tall each goal mouth is
-const P_R = 24, B_R = 13;      // player radius, ball radius
-const ACCEL = 0.85;            // how hard players push
-const P_FRICTION = 0.90;       // player slowdown (1 = ice)
-const B_FRICTION = 0.992;      // ball slowdown
-const MAX_SPEED = 8.5;
-const DASH_POWER = 22;         // impulse when you release a full dash
-const DASH_COST = 100;         // charge needed for a full dash
-const CHARGE_RATE = 2.2;       // charge gained per frame while holding
-const WIN_SCORE = 5;
-/* ------------------------------ */
-
-const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
-let scale = 1, offX = 0, offY = 0;
-
-const state = {
-  mode: 'local',            // local | host | guest | solo
-  p1: null, p2: null, ball: null,
-  s1: 0, s2: 0,
-  kickoff: 0,               // frames of countdown left
-  over: false,
-  running: false
-};
-
-function newPlayer(x, y, colorVar){
-  return { x, y, vx:0, vy:0, charge:0, holding:false, fx:1, fy:0, col:colorVar, flash:0 };
-}
-
-function reset(dir){
-  state.p1 = newPlayer(W*0.25, H/2, 'p1');
-  state.p2 = newPlayer(W*0.75, H/2, 'p2');
-  state.p2.fx = -1;
-  state.ball = { x: W/2, y: H/2, vx: 0, vy: 0 };
-  state.kickoff = 90;
-}
-
-function kickoffDone(){ return state.kickoff <= 0; }
-
-/* ---------- input ---------- */
-const input = {
-  1: { x:0, y:0, dash:false },
-  2: { x:0, y:0, dash:false }
-};
-const keysDown = {};
-document.addEventListener('keydown', e => {
-  keysDown[e.code] = true;
-  if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code)) e.preventDefault();
-});
-document.addEventListener('keyup', e => { keysDown[e.code] = false; });
-
-function readKeys(){
-  const k = keysDown;
-  // Player 1 - WASD, dash on Left Shift
-  let x = (k.KeyD ? 1 : 0) - (k.KeyA ? 1 : 0);
-  let y = (k.KeyS ? 1 : 0) - (k.KeyW ? 1 : 0);
-  if(state.mode === 'local' || state.mode === 'solo' || state.mode === 'host'){
-    input[1].x = x || touch[1].x; input[1].y = y || touch[1].y;
-    input[1].dash = !!k.ShiftLeft || !!k.Space || touch[1].dash;
-  }
-  // Player 2 - arrows, dash on Right Shift or Enter
-  let x2 = (k.ArrowRight ? 1 : 0) - (k.ArrowLeft ? 1 : 0);
-  let y2 = (k.ArrowDown ? 1 : 0) - (k.ArrowUp ? 1 : 0);
-  if(state.mode === 'local'){
-    input[2].x = x2 || touch[2].x; input[2].y = y2 || touch[2].y;
-    input[2].dash = !!k.ShiftRight || !!k.Enter || !!k.NumpadEnter || touch[2].dash;
-  }
-  if(state.mode === 'guest'){
-    // guest drives player 2 with whichever controls it has
-    input[2].x = (x || x2 || touch[1].x); input[2].y = (y || y2 || touch[1].y);
-    input[2].dash = !!k.ShiftLeft || !!k.ShiftRight || !!k.Space || !!k.Enter || touch[1].dash;
-  }
-}
-
-/* touch sticks */
-const touch = { 1:{x:0,y:0,dash:false}, 2:{x:0,y:0,dash:false} };
-function bindStick(el, slot){
-  const knob = el.querySelector('.knob');
-  let id = null, cx = 0, cy = 0;
-  const R = 45;
-  const start = e => {
-    const t = e.changedTouches ? e.changedTouches[0] : e;
-    id = e.changedTouches ? t.identifier : 'mouse';
-    const r = el.getBoundingClientRect();
-    cx = r.left + r.width/2; cy = r.top + r.height/2;
-    move(e);
-  };
-  const move = e => {
-    const list = e.changedTouches ? Array.from(e.changedTouches) : [e];
-    const t = e.changedTouches ? list.find(t => t.identifier === id) : e;
-    if(!t) return;
-    let dx = t.clientX - cx, dy = t.clientY - cy;
-    const d = Math.hypot(dx, dy) || 1;
-    const cl = Math.min(d, R);
-    dx = dx / d * cl; dy = dy / d * cl;
-    knob.style.transform = 'translate(' + dx + 'px,' + dy + 'px)';
-    touch[slot].x = dx / R; touch[slot].y = dy / R;
-    e.preventDefault();
-  };
-  const end = e => {
-    id = null;
-    knob.style.transform = '';
-    touch[slot].x = 0; touch[slot].y = 0;
-  };
-  el.addEventListener('touchstart', start, {passive:false});
-  el.addEventListener('touchmove', move, {passive:false});
-  el.addEventListener('touchend', end);
-  el.addEventListener('touchcancel', end);
-}
-function bindDash(el, slot){
-  const on = e => { e.preventDefault(); touch[slot].dash = true; };
-  const off = e => { touch[slot].dash = false; };
-  el.addEventListener('touchstart', on, {passive:false});
-  el.addEventListener('touchend', off);
-  el.addEventListener('touchcancel', off);
-  el.addEventListener('mousedown', on);
-  el.addEventListener('mouseup', off);
-  el.addEventListener('mouseleave', off);
-}
-bindStick(document.getElementById('stick1'), 1);
-bindStick(document.getElementById('stick2'), 2);
-bindDash(document.getElementById('dash1'), 1);
-bindDash(document.getElementById('dash2'), 2);
-if(matchMedia('(pointer:coarse)').matches) document.body.classList.add('touch');
-
-/* ---------- physics ---------- */
-function drivePlayer(p, inp){
-  let ix = inp.x, iy = inp.y;
-  const m = Math.hypot(ix, iy);
-  if(m > 1){ ix /= m; iy /= m; }
-  const mag = Math.hypot(ix, iy);
-  if(mag > 0.1){ p.fx = ix / mag; p.fy = iy / mag; }   // which way you're facing
-
-  if(inp.dash){
-    p.holding = true;
-    p.charge = Math.min(DASH_COST, p.charge + CHARGE_RATE);
-  } else if(p.holding){
-    // released - fire off in the direction you're facing
-    const power = (p.charge / DASH_COST) * DASH_POWER;
-    if(p.charge > 12) SFX.play('dash');
-    p.vx += p.fx * power; p.vy += p.fy * power;
-    p.flash = 12;
-    p.charge = 0; p.holding = false;
-  }
-
-  const slow = inp.dash ? 0.35 : 1;   // you move slowly while charging
-  p.vx += ix * ACCEL * slow;
-  p.vy += iy * ACCEL * slow;
-  p.vx *= P_FRICTION; p.vy *= P_FRICTION;
-
-  const sp = Math.hypot(p.vx, p.vy);
-  const cap = MAX_SPEED + (p.flash > 0 ? DASH_POWER : 0);
-  if(sp > cap){ p.vx = p.vx / sp * cap; p.vy = p.vy / sp * cap; }
-  if(p.flash > 0) p.flash--;
-
-  p.x += p.vx; p.y += p.vy;
-
-  if(p.x < P_R){ p.x = P_R; p.vx *= -0.4; }
-  if(p.x > W - P_R){ p.x = W - P_R; p.vx *= -0.4; }
-  if(p.y < P_R){ p.y = P_R; p.vy *= -0.4; }
-  if(p.y > H - P_R){ p.y = H - P_R; p.vy *= -0.4; }
-}
-
-function bumpPlayers(a, b){
-  const dx = b.x - a.x, dy = b.y - a.y;
-  const d = Math.hypot(dx, dy);
-  if(d === 0 || d >= P_R * 2) return;
-  const nx = dx / d, ny = dy / d;
-  const overlap = P_R * 2 - d;
-  a.x -= nx * overlap / 2; a.y -= ny * overlap / 2;
-  b.x += nx * overlap / 2; b.y += ny * overlap / 2;
-  const rel = (b.vx - a.vx) * nx + (b.vy - a.vy) * ny;
-  if(rel > 0) return;
-  const imp = -rel * 0.9;
-  a.vx -= nx * imp; a.vy -= ny * imp;
-  b.vx += nx * imp; b.vy += ny * imp;
-}
-
-function hitBall(p, ball){
-  const dx = ball.x - p.x, dy = ball.y - p.y;
-  const d = Math.hypot(dx, dy);
-  if(d === 0 || d >= P_R + B_R) return;
-  const nx = dx / d, ny = dy / d;
-  ball.x = p.x + nx * (P_R + B_R);
-  ball.y = p.y + ny * (P_R + B_R);
-  const sp = Math.hypot(p.vx, p.vy);
-  SFX.play('kick');
-  const boost = 3 + sp * 1.35;
-  ball.vx = nx * boost + p.vx * 0.35;
-  ball.vy = ny * boost + p.vy * 0.35;
-}
-
-function moveBall(b){
-  b.x += b.vx; b.y += b.vy;
-  b.vx *= B_FRICTION; b.vy *= B_FRICTION;
-  const inGoalBand = b.y > (H - GOAL_H)/2 && b.y < (H + GOAL_H)/2;
-  if(b.y < B_R){ b.y = B_R; b.vy *= -0.85; if(Math.abs(b.vy) > 3) SFX.play('bounce'); }
-  if(b.y > H - B_R){ b.y = H - B_R; b.vy *= -0.85; if(Math.abs(b.vy) > 3) SFX.play('bounce'); }
-  if(!inGoalBand){
-    if(b.x < B_R){ b.x = B_R; b.vx *= -0.85; }
-    if(b.x > W - B_R){ b.x = W - B_R; b.vx *= -0.85; }
-  } else {
-    if(b.x < -B_R * 2) return 2;     // right player (p2) scored
-    if(b.x > W + B_R * 2) return 1;  // left player (p1) scored
-  }
-  const sp = Math.hypot(b.vx, b.vy);
-  if(sp > 26){ b.vx = b.vx/sp*26; b.vy = b.vy/sp*26; }
-  return 0;
-}
-
-/* The computer opponent. AI_SKILL is 0 (hopeless) to 1 (sharp).
-   Turn it down if it's beating you too often. */
-const AI_SKILL = 0.62;
-let aiWobble = { x:0, y:0, t:0 };
-function aiInput(){
-  const p = state.p2, b = state.ball;
-  aiWobble.t--;
-  if(aiWobble.t <= 0){
-    // every so often it aims a bit off - that's what makes it beatable
-    const err = (1 - AI_SKILL) * 190;
-    aiWobble = { x:(Math.random()-0.5)*err, y:(Math.random()-0.5)*err, t: 18 + Math.random()*26 };
-  }
-  // stand goal-side of the ball, then push it back the other way
-  const targetX = b.x + 55 + aiWobble.x, targetY = b.y + aiWobble.y;
-  let dx = targetX - p.x, dy = targetY - p.y;
-  const d = Math.hypot(dx, dy) || 1;
-  const eff = 0.55 + AI_SKILL * 0.45;
-  input[2].x = dx / d * eff;
-  input[2].y = dy / d * eff;
-  input[2].dash = d < 90 && Math.abs(b.x - p.x) < 120 && Math.random() < 0.04 * AI_SKILL;
-  if(p.charge > 55) input[2].dash = false;
-}
-
-function simulate(){
-  if(state.kickoff > 0){ state.kickoff--; return; }
-  if(state.mode === 'solo') aiInput();
-  drivePlayer(state.p1, input[1]);
-  drivePlayer(state.p2, input[2]);
-  bumpPlayers(state.p1, state.p2);
-  hitBall(state.p1, state.ball);
-  hitBall(state.p2, state.ball);
-  const goal = moveBall(state.ball);
-  if(goal){
-    SFX.play('goal');
-    if(goal === 1) state.s1++; else state.s2++;
-    if(state.s1 >= WIN_SCORE || state.s2 >= WIN_SCORE) finish();
-    else reset();
-  }
-}
-
-function finish(){
-  state.over = true;
-  SFX.play('win');
-  const p1Won = state.s1 > state.s2;
-  const names = nameFor();
-  document.getElementById('resultTitle').textContent = (p1Won ? names[0] : names[1]) + ' wins!';
-  document.getElementById('resultText').textContent = state.s1 + ' - ' + state.s2;
-  document.getElementById('result').style.display = 'flex';
-  if(conn && conn.open) conn.send({ t:'over', s1:state.s1, s2:state.s2 });
-}
-
-function nameFor(){
-  if(state.mode === 'solo') return ['You', 'Computer'];
-  if(state.mode === 'host') return ['You (host)', 'Them'];
-  if(state.mode === 'guest') return ['Them', 'You'];
-  return ['Orange', 'Blue'];
-}
-
-/* ---------- drawing ---------- */
-function fit(){
-  const st = document.getElementById('stage');
-  const dpr = Math.min(window.devicePixelRatio || 1, 2);
-  cv.width = st.clientWidth * dpr; cv.height = st.clientHeight * dpr;
-  scale = Math.min(cv.width / W, cv.height / H);
-  offX = (cv.width - W * scale) / 2;
-  offY = (cv.height - H * scale) / 2;
-}
-window.addEventListener('resize', fit);
-window.addEventListener('orientationchange', () => setTimeout(fit, 250));
-
-function draw(){
-  ctx.setTransform(1,0,0,1,0,0);
-  ctx.fillStyle = '#08120c';
-  ctx.fillRect(0,0,cv.width,cv.height);
-  ctx.setTransform(scale,0,0,scale,offX,offY);
-
-  // grass with mow stripes
-  for(let i = 0; i < 10; i++){
-    ctx.fillStyle = i % 2 ? '#2a7135' : '#2f7d3a';
-    ctx.fillRect(i * W/10, 0, W/10, H);
-  }
-  ctx.strokeStyle = 'rgba(234,245,236,.75)'; ctx.lineWidth = 3;
-  ctx.strokeRect(6, 6, W-12, H-12);
-  ctx.beginPath(); ctx.moveTo(W/2, 6); ctx.lineTo(W/2, H-6); ctx.stroke();
-  ctx.beginPath(); ctx.arc(W/2, H/2, 74, 0, 7); ctx.stroke();
-  // penalty boxes
-  ctx.strokeRect(6, (H-260)/2, 110, 260);
-  ctx.strokeRect(W-6-110, (H-260)/2, 110, 260);
-  // goals
-  ctx.lineWidth = 6;
-  ctx.strokeStyle = '#ffd93d';
-  ctx.beginPath(); ctx.moveTo(6,(H-GOAL_H)/2); ctx.lineTo(6,(H+GOAL_H)/2); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(W-6,(H-GOAL_H)/2); ctx.lineTo(W-6,(H+GOAL_H)/2); ctx.stroke();
-
-  const px = getComputedStyle(document.documentElement);
-  drawPlayer(state.p1, px.getPropertyValue('--p1').trim());
-  drawPlayer(state.p2, px.getPropertyValue('--p2').trim());
-
-  // ball
-  const b = state.ball;
-  ctx.fillStyle = '#ffffff';
-  ctx.shadowColor = 'rgba(0,0,0,.55)'; ctx.shadowBlur = 12; ctx.shadowOffsetY = 4;
-  ctx.beginPath(); ctx.arc(b.x, b.y, B_R, 0, 7); ctx.fill();
-  ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
-  ctx.fillStyle = '#222'; 
-  for(let i = 0; i < 5; i++){
-    const a = i / 5 * Math.PI * 2 + (b.x + b.y) / 40;
-    ctx.beginPath();
-    ctx.arc(b.x + Math.cos(a)*B_R*0.55, b.y + Math.sin(a)*B_R*0.55, B_R*0.20, 0, 7);
-    ctx.fill();
-  }
-
-  // score
-  ctx.fillStyle = 'rgba(255,255,255,.92)';
-  ctx.font = 'bold 44px Trebuchet MS'; ctx.textAlign = 'center';
-  ctx.fillText(state.s1 + '  -  ' + state.s2, W/2, 52);
-
-  if(state.kickoff > 0){
-    ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(0,0,W,H);
-    ctx.fillStyle = '#fff'; ctx.font = 'bold 84px Trebuchet MS';
-    ctx.fillText(Math.ceil(state.kickoff / 30), W/2, H/2 + 30);
-  }
-}
-
-function drawPlayer(p, col){
-  if(!p) return;
-  ctx.save();
-  // charge ring
-  if(p.charge > 2){
-    ctx.strokeStyle = '#ffd93d'; ctx.lineWidth = 4;
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, P_R + 8, -Math.PI/2, -Math.PI/2 + (p.charge/DASH_COST) * Math.PI * 2);
-    ctx.stroke();
-  }
-  ctx.shadowColor = 'rgba(0,0,0,.5)'; ctx.shadowBlur = 12; ctx.shadowOffsetY = 5;
-  ctx.fillStyle = col;
-  ctx.beginPath(); ctx.arc(p.x, p.y, P_R, 0, 7); ctx.fill();
-  ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
-  ctx.fillStyle = 'rgba(255,255,255,.85)';
-  ctx.beginPath(); ctx.arc(p.x + p.fx*P_R*0.42, p.y + p.fy*P_R*0.42, P_R*0.26, 0, 7); ctx.fill();
-  if(p.flash > 0){
-    ctx.globalAlpha = p.flash / 12;
-    ctx.strokeStyle = '#ffd93d'; ctx.lineWidth = 5;
-    ctx.beginPath(); ctx.arc(p.x, p.y, P_R + (12 - p.flash) * 2.5, 0, 7); ctx.stroke();
-    ctx.globalAlpha = 1;
-  }
-  ctx.restore();
-}
-
-/* ============================================================
-   NETWORKING (phone to phone)
-
-   Two phones talk directly to each other over WebRTC. To find
-   each other they need help:
-
-   STUN  - "what does my address look like from outside?"
-           Enough when both players are on the same wifi.
-   TURN  - a relay that both sides can reach when a direct link
-           is impossible. Needed far more often than people
-           expect: mobile networks and a lot of home routers use
-           a kind of NAT that STUN alone cannot get through.
-
-   Without TURN this works perfectly between two devices in the
-   same house and fails the moment someone is on mobile data.
-   That is exactly the bug we hit.
-   ============================================================ */
-let peer = null, conn = null, netTick = 0, connectTimer = null, wakeLock = null;
-const PREFIX = 'stelladad-';
-
 /* ---------- TWEAK ME: who helps the phones find each other ---------- */
 const PEER_CONFIG = {
   config: {
@@ -666,23 +278,606 @@ const PEER_CONFIG = {
 };
 const CONNECT_TIMEOUT = 22000;   // ms before we admit it is not going to happen
 /* -------------------------------------------------------------------- */
+/* ============================================================
+   SOCCER DUEL
+   A whole pitch on screen at once, a keeper in each goal, and
+   teams of one or three. You do not steer a single circle - you
+   steer whoever is nearest the ball, and the game hands you the
+   next one automatically.
+   ============================================================ */
 
+/* ---------- TWEAK ME ---------- */
+const W = 1400, H = 900;      // the pitch, in game units
+const GOAL_H = 240;           // how wide the goal mouth is
+const P_R = 22, B_R = 13;     // player radius, ball radius
+const ACCEL = 1.15;
+const FRICTION = 0.88;
+const MAX_SPEED = 6.6;
+const BALL_FRICTION = 0.985;
+const DRIBBLE_R = 42;         // how close the ball sticks to you
+const PASS_POWER = 15;
+const SHOOT_POWER = 24;
+const KEEPER_SPEED = 2.35;    // lower = easier to score past
+const KEEPER_ERROR = 70;      // how far he misreads the ball, in units
+const WIN_SCORE = 5;
+/* ------------------------------ */
+
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+let scale = 1, offX = 0, offY = 0, rotated = false;
+
+const S = {
+  mode: 'solo',        // solo | local | host | guest
+  teamSize: 1,
+  teams: [],           // [ {side, colour, players[], keeper, score} ]
+  ball: null,
+  carrier: null,       // the player currently on the ball
+  kickoff: 90,
+  over: false,
+  running: false,
+  passTarget: null
+};
+
+function mkPlayer(team, x, y, index){
+  return { team, index, x, y, vx:0, vy:0, fx: team.side, fy:0, flash:0 };
+}
+
+function formation(side, n){
+  // spread them across their own half
+  const homeX = side > 0 ? W * 0.30 : W * 0.70;
+  if(n === 1) return [[homeX, H/2]];
+  return [
+    [side > 0 ? W*0.22 : W*0.78, H*0.28],
+    [homeX,                       H*0.50],
+    [side > 0 ? W*0.22 : W*0.78, H*0.72]
+  ];
+}
+
+function buildTeams(){
+  S.teams = [1, -1].map((side, i) => {
+    const t = { side, colour: i === 0 ? 'p1' : 'p2', players: [], score: 0,
+                keeper: { x: side > 0 ? 40 : W - 40, y: H/2, side } };
+    formation(side, S.teamSize).forEach((pos, k) => t.players.push(mkPlayer(t, pos[0], pos[1], k)));
+    return t;
+  });
+}
+
+function kickoff(){
+  S.teams.forEach(t => {
+    formation(t.side, S.teamSize).forEach((pos, k) => {
+      const p = t.players[k];
+      p.x = pos[0]; p.y = pos[1]; p.vx = p.vy = 0; p.fx = t.side; p.fy = 0;
+    });
+    t.keeper.x = t.side > 0 ? 40 : W - 40; t.keeper.y = H/2;
+  });
+  S.ball = { x: W/2, y: H/2, vx: 0, vy: 0, freeT: 0 };
+  S.carrier = null;
+  S.kickoff = 90;
+}
+
+/* ---------- who am I steering? ---------- */
+/* Whoever on your team is closest to the ball, unless a team-mate is
+   actually carrying it - then it is them. Nobody wants to chase a ball
+   with the wrong player. */
+function activeFor(team){
+  const carrying = S.carrier && S.carrier.team === team ? S.carrier : null;
+  if(carrying) return carrying;
+  let best = team.players[0], bd = Infinity;
+  for(const p of team.players){
+    const d = (p.x - S.ball.x) ** 2 + (p.y - S.ball.y) ** 2;
+    if(d < bd){ bd = d; best = p; }
+  }
+  return best;
+}
+
+/* ---------- input ---------- */
+const input = {
+  0: { x:0, y:0, pass:false, shoot:false, passHit:false, shootHit:false },
+  1: { x:0, y:0, pass:false, shoot:false, passHit:false, shootHit:false }
+};
+const prevBtn = [{}, {}];
+const keys = {};
+document.addEventListener('keydown', e => {
+  keys[e.code] = true;
+  if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code)) e.preventDefault();
+});
+document.addEventListener('keyup', e => { keys[e.code] = false; });
+
+const touch = { x:0, y:0, pass:false, shoot:false };
+
+function readInput(){
+  const k = keys;
+  // team 0: WASD, J pass, K shoot
+  let ax = (k.KeyD?1:0) - (k.KeyA?1:0);
+  let ay = (k.KeyS?1:0) - (k.KeyW?1:0);
+  let aPass = !!k.KeyJ || !!k.Space, aShoot = !!k.KeyK || !!k.ShiftLeft;
+  // team 1: arrows, . pass, / shoot
+  let bx = (k.ArrowRight?1:0) - (k.ArrowLeft?1:0);
+  let by = (k.ArrowDown?1:0) - (k.ArrowUp?1:0);
+  let bPass = !!k.Period || !!k.Enter, bShoot = !!k.Slash || !!k.ShiftRight;
+
+  // the thumbstick drives whichever team this device is playing
+  let tx = touch.x, ty = touch.y;
+  if(rotated){ const rx = -ty, ry = tx; tx = rx; ty = ry; }
+
+  const mine = (S.mode === 'guest') ? 1 : 0;
+  const set = (i, x, y, pass, shoot) => {
+    const p = input[i];
+    p.x = x; p.y = y;
+    p.passHit = pass && !prevBtn[i].pass;
+    p.shootHit = shoot && !prevBtn[i].shoot;
+    prevBtn[i].pass = pass; prevBtn[i].shoot = shoot;
+    p.pass = pass; p.shoot = shoot;
+  };
+
+  if(S.mode === 'local'){
+    set(0, ax || tx, ay || ty, aPass || touch.pass, aShoot || touch.shoot);
+    set(1, bx, by, bPass, bShoot);
+  } else if(S.mode === 'guest'){
+    set(1, bx || ax || tx, by || ay || ty, aPass || bPass || touch.pass, aShoot || bShoot || touch.shoot);
+  } else {
+    set(0, ax || tx, ay || ty, aPass || touch.pass, aShoot || touch.shoot);
+  }
+}
+
+/* ---------- movement ---------- */
+function drivePlayer(p, inp, dt){
+  let ix = inp.x, iy = inp.y;
+  const m = Math.hypot(ix, iy);
+  if(m > 1){ ix /= m; iy /= m; }
+  if(m > 0.12){ const n = Math.hypot(ix, iy) || 1; p.fx = ix / n; p.fy = iy / n; }
+  p.vx += ix * ACCEL; p.vy += iy * ACCEL;
+  p.vx *= FRICTION; p.vy *= FRICTION;
+  const sp = Math.hypot(p.vx, p.vy);
+  if(sp > MAX_SPEED){ p.vx = p.vx / sp * MAX_SPEED; p.vy = p.vy / sp * MAX_SPEED; }
+  p.x += p.vx; p.y += p.vy;
+  p.x = Math.max(P_R, Math.min(W - P_R, p.x));
+  p.y = Math.max(P_R, Math.min(H - P_R, p.y));
+  if(p.flash > 0) p.flash--;
+}
+
+function coast(p){
+  p.vx *= FRICTION; p.vy *= FRICTION;
+  p.x += p.vx; p.y += p.vy;
+  p.x = Math.max(P_R, Math.min(W - P_R, p.x));
+  p.y = Math.max(P_R, Math.min(H - P_R, p.y));
+  if(p.flash > 0) p.flash--;
+}
+
+function separate(){
+  const all = S.teams.flatMap(t => t.players);
+  for(let i = 0; i < all.length; i++)
+    for(let j = i + 1; j < all.length; j++){
+      const a = all[i], b = all[j];
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const d = Math.hypot(dx, dy);
+      if(d === 0 || d >= P_R * 2) continue;
+      const nx = dx / d, ny = dy / d, over = (P_R * 2 - d) / 2;
+      a.x -= nx * over; a.y -= ny * over;
+      b.x += nx * over; b.y += ny * over;
+    }
+}
+
+/* ---------- the ball ---------- */
+function updateBall(){
+  const b = S.ball;
+
+  // A kicked ball is nobody's for a few frames, otherwise the kicker is
+  // still standing inside his own dribble radius and instantly takes it
+  // back, and no pass or shot ever travels.
+  if(b.freeT > 0) b.freeT--;
+
+  if(b.freeT > 0){
+    S.carrier = null;
+  } else {
+    let best = null, bd = DRIBBLE_R * DRIBBLE_R;
+    for(const t of S.teams) for(const p of t.players){
+      const d = (p.x - b.x) ** 2 + (p.y - b.y) ** 2;
+      if(d < bd){ bd = d; best = p; }
+    }
+    S.carrier = best;
+  }
+
+  if(S.carrier){
+    // glue it just in front of the boot
+    const p = S.carrier;
+    const f = Math.hypot(p.fx, p.fy) || 1;
+    const tx = p.x + (p.fx / f) * (P_R + B_R + 5);
+    const ty = p.y + (p.fy / f) * (P_R + B_R + 5);
+    b.x += (tx - b.x) * 0.42;
+    b.y += (ty - b.y) * 0.42;
+    b.vx = p.vx; b.vy = p.vy;
+  } else {
+    b.x += b.vx; b.y += b.vy;
+    b.vx *= BALL_FRICTION; b.vy *= BALL_FRICTION;
+  }
+
+  const band = b.y > (H - GOAL_H)/2 && b.y < (H + GOAL_H)/2;
+  if(b.y < B_R){ b.y = B_R; b.vy *= -0.82; }
+  if(b.y > H - B_R){ b.y = H - B_R; b.vy *= -0.82; }
+  if(!band){
+    if(b.x < B_R){ b.x = B_R; b.vx *= -0.82; }
+    if(b.x > W - B_R){ b.x = W - B_R; b.vx *= -0.82; }
+  } else {
+    if(b.x < -B_R * 2) return -1;    // team with side -1 scored
+    if(b.x > W + B_R * 2) return 1;  // team with side +1 scored
+  }
+  const sp = Math.hypot(b.vx, b.vy);
+  if(sp > 30){ b.vx = b.vx / sp * 30; b.vy = b.vy / sp * 30; }
+  return 0;
+}
+
+/* ---------- keepers ---------- */
+function driveKeeper(k){
+  const b = S.ball;
+  // A keeper who tracks the ball perfectly is unbeatable, which is not
+  // a game. He guesses slightly wrong, and re-guesses a few times a second.
+  if(k.errT === undefined || --k.errT <= 0){
+    k.err = (Math.random() * 2 - 1) * KEEPER_ERROR;
+    k.errT = 18 + Math.random() * 22;
+  }
+  const top = (H - GOAL_H) / 2 + 16, bot = (H + GOAL_H) / 2 - 16;
+  const homeX = k.side > 0 ? 40 : W - 40;
+  const onHisSide = k.side > 0 ? b.x < W * 0.5 : b.x > W * 0.5;
+  let wantY = H / 2, wantX = homeX;
+  if(onHisSide){
+    wantY = Math.max(top, Math.min(bot, b.y + k.err));
+    const closeness = k.side > 0 ? 1 - b.x / (W * 0.5) : (b.x - W * 0.5) / (W * 0.5);
+    wantX = homeX + k.side * Math.max(0, Math.min(1, closeness)) * 55;
+  }
+  k.y += Math.max(-KEEPER_SPEED, Math.min(KEEPER_SPEED, wantY - k.y));
+  k.x += Math.max(-KEEPER_SPEED * 0.7, Math.min(KEEPER_SPEED * 0.7, wantX - k.x));
+  // save
+  const dx = S.ball.x - k.x, dy = S.ball.y - k.y, d = Math.hypot(dx, dy), R = 24;
+  if(d > 0 && d < R + B_R && !S.carrier){
+    const nx = dx / d, ny = dy / d;
+    S.ball.x = k.x + nx * (R + B_R); S.ball.y = k.y + ny * (R + B_R);
+    const sp = Math.max(9, Math.hypot(S.ball.vx, S.ball.vy) * 0.95);
+    S.ball.vx = nx * sp; S.ball.vy = ny * sp;
+    SFX.play('kick');
+  }
+}
+
+/* ---------- passing & shooting ---------- */
+/* The best team-mate to pass to: mostly the one you are facing, with a
+   nudge towards whoever is further up the pitch. */
+function passTargetFor(p){
+  const mates = p.team.players.filter(m => m !== p);
+  if(!mates.length) return null;
+  const f = Math.hypot(p.fx, p.fy) || 1;
+  const fx = p.fx / f, fy = p.fy / f;
+  let best = null, bestScore = -Infinity;
+  for(const m of mates){
+    const dx = m.x - p.x, dy = m.y - p.y;
+    const d = Math.hypot(dx, dy) || 1;
+    const facing = (dx / d) * fx + (dy / d) * fy;      // -1..1
+    const upfield = (m.x - p.x) * p.team.side / W;      // towards their goal
+    const score = facing * 2 + upfield * 1.2 - d / W;
+    if(score > bestScore){ bestScore = score; best = m; }
+  }
+  return best;
+}
+
+function doPass(p){
+  const target = passTargetFor(p);
+  if(!target){ doShoot(p); return; }
+  const dx = target.x - p.x, dy = target.y - p.y;
+  const d = Math.hypot(dx, dy) || 1;
+  // lead them a little so the ball arrives where they are going
+  const lead = Math.min(1, d / 400);
+  const tx = target.x + target.vx * 8 * lead, ty = target.y + target.vy * 8 * lead;
+  const ax = tx - p.x, ay = ty - p.y, ad = Math.hypot(ax, ay) || 1;
+  const power = Math.min(PASS_POWER, 6 + ad / 34);
+  S.ball.x = p.x + (ax / ad) * (P_R + B_R + 6);
+  S.ball.y = p.y + (ay / ad) * (P_R + B_R + 6);
+  S.ball.vx = (ax / ad) * power; S.ball.vy = (ay / ad) * power;
+  S.ball.freeT = 14;
+  S.carrier = null;
+  p.flash = 8;
+  SFX.play('kick');
+}
+
+function doShoot(p){
+  const goalX = p.team.side > 0 ? W + 10 : -10;
+  // Aim for the corner the keeper is furthest from. Shooting at the
+  // middle of the goal is shooting at the goalkeeper.
+  const keeper = S.teams.find(t => t.side !== p.team.side).keeper;
+  const topPost = (H - GOAL_H) / 2 + 26, botPost = (H + GOAL_H) / 2 - 26;
+  const aimY = Math.abs(keeper.y - topPost) > Math.abs(keeper.y - botPost) ? topPost : botPost;
+  const dx = goalX - p.x, dy = aimY - p.y;
+  const dd = Math.hypot(dx, dy) || 1;
+  const f = Math.hypot(p.fx, p.fy) || 1;
+  let ax = (p.fx / f) * 0.30 + (dx / dd) * 0.70;
+  let ay = (p.fy / f) * 0.30 + (dy / dd) * 0.70;
+  const ad = Math.hypot(ax, ay) || 1;
+  S.ball.x = p.x + (ax / ad) * (P_R + B_R + 6);
+  S.ball.y = p.y + (ay / ad) * (P_R + B_R + 6);
+  S.ball.vx = (ax / ad) * SHOOT_POWER; S.ball.vy = (ay / ad) * SHOOT_POWER;
+  S.ball.freeT = 22;
+  S.carrier = null;
+  p.flash = 12;
+  SFX.play('dash');
+}
+
+/* ---------- the computer ---------- */
+const AI_SKILL = 0.62;
+function aiTeam(team, dt){
+  const active = activeFor(team);
+  for(const p of team.players){
+    if(p === active){
+      // chase the ball, and shoot or pass when on it
+      const dx = S.ball.x - p.x, dy = S.ball.y - p.y;
+      const d = Math.hypot(dx, dy) || 1;
+      drivePlayer(p, { x: dx / d * (0.6 + AI_SKILL * 0.4), y: dy / d * (0.6 + AI_SKILL * 0.4) }, dt);
+      if(S.carrier === p){
+        const toGoal = Math.abs((team.side > 0 ? W : 0) - p.x);
+        if(toGoal < 340 && Math.random() < 0.05 * AI_SKILL) doShoot(p);
+        else if(team.players.length > 1 && Math.random() < 0.018) doPass(p);
+      }
+    } else {
+      // hold a supporting position up the pitch
+      const homeY = formation(team.side, S.teamSize)[p.index][1];
+      const tx = S.ball.x * 0.45 + (team.side > 0 ? W * 0.45 : W * 0.55) * 0.55;
+      const ty = homeY * 0.55 + S.ball.y * 0.45;
+      const dx = tx - p.x, dy = ty - p.y, d = Math.hypot(dx, dy) || 1;
+      drivePlayer(p, { x: d > 40 ? dx / d * 0.6 : 0, y: d > 40 ? dy / d * 0.6 : 0 }, dt);
+    }
+  }
+}
+
+/* ---------- one step of the game ---------- */
+function simulate(dt){
+  if(S.kickoff > 0){ S.kickoff--; return; }
+  readInput();
+
+  const human = [];
+  if(S.mode === 'local'){ human.push([S.teams[0], input[0]], [S.teams[1], input[1]]); }
+  else if(S.mode === 'host'){ human.push([S.teams[0], input[0]], [S.teams[1], input[1]]); }
+  else if(S.mode === 'guest'){ human.push([S.teams[1], input[1]]); }
+  else { human.push([S.teams[0], input[0]]); }
+
+  const driven = new Set();
+  for(const [team, inp] of human){
+    const p = activeFor(team);
+    driven.add(p);
+    drivePlayer(p, inp, dt);
+    if(S.carrier === p){
+      if(inp.passHit) doPass(p);
+      else if(inp.shootHit) doShoot(p);
+    }
+    // team-mates you are not steering hold shape
+    for(const m of team.players){
+      if(m === p) continue;
+      const homeY = formation(team.side, S.teamSize)[m.index][1];
+      const tx = S.ball.x * 0.4 + (team.side > 0 ? W * 0.42 : W * 0.58) * 0.6;
+      const ty = homeY * 0.5 + S.ball.y * 0.5;
+      const dx = tx - m.x, dy = ty - m.y, d = Math.hypot(dx, dy) || 1;
+      drivePlayer(m, { x: d > 45 ? dx / d * 0.62 : 0, y: d > 45 ? dy / d * 0.62 : 0 }, dt);
+      driven.add(m);
+    }
+  }
+  // any team with no human on it is run by the computer
+  for(const t of S.teams){
+    if(human.some(h => h[0] === t)) continue;
+    aiTeam(t, dt);
+    t.players.forEach(p => driven.add(p));
+  }
+  for(const t of S.teams) for(const p of t.players) if(!driven.has(p)) coast(p);
+
+  separate();
+  S.teams.forEach(t => driveKeeper(t.keeper));
+  const scored = updateBall();
+  S.passTarget = S.carrier ? passTargetFor(S.carrier) : null;
+
+  if(scored){
+    const team = S.teams.find(t => t.side === scored);
+    team.score++;
+    SFX.play('goal');
+    // Either way the ball comes back to the centre spot. Left where it
+    // was, it is still over the line and scores again every frame.
+    kickoff();
+    if(team.score >= WIN_SCORE) finish();
+  }
+}
+
+/* ============================================================
+   DRAWING
+   The whole pitch is on screen at once - no scrolling camera. On
+   a tall phone the pitch is turned ninety degrees so it runs up
+   the screen instead of being squeezed into a letterbox slot.
+   ============================================================ */
+function fit(){
+  const st = document.getElementById('stage');
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  cv.width = st.clientWidth * dpr;
+  cv.height = st.clientHeight * dpr;
+  rotated = cv.height > cv.width * 1.1;
+  if(rotated){
+    scale = Math.min(cv.height / W, cv.width / H);
+    offX = (cv.width - H * scale) / 2;
+    offY = (cv.height - W * scale) / 2;
+  } else {
+    scale = Math.min(cv.width / W, cv.height / H);
+    offX = (cv.width - W * scale) / 2;
+    offY = (cv.height - H * scale) / 2;
+  }
+}
+addEventListener('resize', fit);
+addEventListener('orientationchange', () => setTimeout(fit, 250));
+
+function pitchTransform(){
+  if(rotated){
+    ctx.setTransform(scale, 0, 0, scale, offX, offY);
+    ctx.translate(H, 0);
+    ctx.rotate(Math.PI / 2);
+  } else {
+    ctx.setTransform(scale, 0, 0, scale, offX, offY);
+  }
+}
+
+function drawPitch(){
+  for(let i = 0; i < 12; i++){
+    ctx.fillStyle = i % 2 ? '#2a7135' : '#2f7d3a';
+    ctx.fillRect(i * W / 12, 0, W / 12, H);
+  }
+  ctx.strokeStyle = 'rgba(234,245,236,.8)'; ctx.lineWidth = 4;
+  ctx.strokeRect(8, 8, W - 16, H - 16);
+  ctx.beginPath(); ctx.moveTo(W/2, 8); ctx.lineTo(W/2, H - 8); ctx.stroke();
+  ctx.beginPath(); ctx.arc(W/2, H/2, 110, 0, 7); ctx.stroke();
+  ctx.strokeRect(8, (H - 400)/2, 170, 400);
+  ctx.strokeRect(W - 8 - 170, (H - 400)/2, 170, 400);
+  ctx.strokeRect(8, (H - GOAL_H - 90)/2, 70, GOAL_H + 90);
+  ctx.strokeRect(W - 8 - 70, (H - GOAL_H - 90)/2, 70, GOAL_H + 90);
+  ctx.lineWidth = 9; ctx.strokeStyle = '#ffd93d';
+  ctx.beginPath(); ctx.moveTo(8, (H-GOAL_H)/2); ctx.lineTo(8, (H+GOAL_H)/2); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(W-8, (H-GOAL_H)/2); ctx.lineTo(W-8, (H+GOAL_H)/2); ctx.stroke();
+}
+
+function drawKeeper(k){
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,.45)'; ctx.shadowBlur = 12; ctx.shadowOffsetY = 5;
+  ctx.fillStyle = '#e8e2d0';
+  ctx.beginPath(); ctx.arc(k.x, k.y, 24, 0, 7); ctx.fill();
+  ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
+  ctx.fillStyle = '#2f9b52';
+  ctx.beginPath(); ctx.arc(k.x - k.side * 7, k.y - 16, 7, 0, 7); ctx.fill();
+  ctx.beginPath(); ctx.arc(k.x - k.side * 7, k.y + 16, 7, 0, 7); ctx.fill();
+  ctx.restore();
+}
+
+function drawPlayer(p, colour, isActive){
+  ctx.save();
+  if(isActive){
+    // a ring so you always know which one you are steering
+    ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.arc(p.x, p.y, P_R + 9, 0, 7); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,217,61,.9)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(p.x, p.y, P_R + 13, 0, 7); ctx.stroke();
+  }
+  ctx.shadowColor = 'rgba(0,0,0,.5)'; ctx.shadowBlur = 12; ctx.shadowOffsetY = 5;
+  ctx.fillStyle = colour;
+  ctx.beginPath(); ctx.arc(p.x, p.y, P_R, 0, 7); ctx.fill();
+  ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
+  ctx.fillStyle = 'rgba(255,255,255,.9)';
+  const f = Math.hypot(p.fx, p.fy) || 1;
+  ctx.beginPath(); ctx.arc(p.x + p.fx/f * P_R * 0.45, p.y + p.fy/f * P_R * 0.45, P_R * 0.27, 0, 7); ctx.fill();
+  if(p.flash > 0){
+    ctx.globalAlpha = p.flash / 12;
+    ctx.strokeStyle = '#ffd93d'; ctx.lineWidth = 5;
+    ctx.beginPath(); ctx.arc(p.x, p.y, P_R + (12 - p.flash) * 3, 0, 7); ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+  ctx.restore();
+}
+
+/* the arrow that tells you who PASS will find */
+function drawPassArrow(){
+  if(!S.carrier || !S.passTarget) return;
+  const a = S.carrier, b = S.passTarget;
+  const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || 1;
+  const nx = dx / d, ny = dy / d;
+  const x0 = a.x + nx * (P_R + 14), y0 = a.y + ny * (P_R + 14);
+  const x1 = b.x - nx * (P_R + 16), y1 = b.y - ny * (P_R + 16);
+  ctx.save();
+  ctx.strokeStyle = 'rgba(255,217,61,.85)'; ctx.lineWidth = 6;
+  ctx.setLineDash([16, 12]);
+  ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+  ctx.setLineDash([]);
+  const head = 22;
+  ctx.fillStyle = '#ffd93d';
+  ctx.beginPath();
+  ctx.moveTo(x1 + nx * head, y1 + ny * head);
+  ctx.lineTo(x1 - ny * head * 0.55, y1 + nx * head * 0.55);
+  ctx.lineTo(x1 + ny * head * 0.55, y1 - nx * head * 0.55);
+  ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,217,61,.9)'; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.arc(b.x, b.y, P_R + 7, 0, 7); ctx.stroke();
+  ctx.restore();
+}
+
+function drawBall(){
+  const b = S.ball;
+  ctx.save();
+  ctx.fillStyle = '#ffffff';
+  ctx.shadowColor = 'rgba(0,0,0,.55)'; ctx.shadowBlur = 12; ctx.shadowOffsetY = 4;
+  ctx.beginPath(); ctx.arc(b.x, b.y, B_R, 0, 7); ctx.fill();
+  ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
+  ctx.fillStyle = '#222';
+  for(let i = 0; i < 5; i++){
+    const ang = i / 5 * Math.PI * 2 + (b.x + b.y) / 45;
+    ctx.beginPath();
+    ctx.arc(b.x + Math.cos(ang) * B_R * 0.55, b.y + Math.sin(ang) * B_R * 0.55, B_R * 0.2, 0, 7);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function draw(){
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.fillStyle = '#08120c';
+  ctx.fillRect(0, 0, cv.width, cv.height);
+  pitchTransform();
+  drawPitch();
+  S.teams.forEach(t => drawKeeper(t.keeper));
+  drawPassArrow();
+
+  const mineTeam = S.mode === 'guest' ? S.teams[1] : S.teams[0];
+  const theirs   = S.mode === 'guest' ? S.teams[0] : S.teams[1];
+  const activeMine = S.running ? activeFor(mineTeam) : null;
+  const activeTheirs = (S.mode === 'local' || S.mode === 'host') && S.running ? activeFor(theirs) : null;
+  const css = getComputedStyle(document.documentElement);
+  const c1 = css.getPropertyValue('--p1').trim(), c2 = css.getPropertyValue('--p2').trim();
+  for(const t of S.teams){
+    const colour = t === S.teams[0] ? c1 : c2;
+    for(const p of t.players) drawPlayer(p, colour, p === activeMine || p === activeTheirs);
+  }
+  drawBall();
+
+  if(S.kickoff > 0){ ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(0, 0, W, H); }
+
+  // scoreboard, drawn upright in a corner whatever the pitch is doing
+  ctx.setTransform(1,0,0,1,0,0);
+  const sz = Math.max(22, Math.round(Math.min(cv.width, cv.height) * 0.055));
+  const pad = Math.round(sz * 0.45);
+  const label = S.teams[0].score + ' - ' + S.teams[1].score;
+  ctx.font = 'bold ' + sz + 'px Trebuchet MS';
+  ctx.textAlign = 'left';
+  const wBox = ctx.measureText(label).width + pad * 2;
+  ctx.fillStyle = 'rgba(8,18,12,.8)';
+  ctx.fillRect(pad * 0.6, pad * 0.6, wBox, sz + pad);
+  ctx.fillStyle = '#ffd93d';
+  ctx.fillText(label, pad * 0.6 + pad, pad * 0.6 + sz * 0.92);
+
+  if(S.kickoff > 0){
+    const huge = Math.max(56, Math.round(Math.min(cv.width, cv.height) * 0.22));
+    ctx.font = 'bold ' + huge + 'px Trebuchet MS';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(0,0,0,.45)';
+    ctx.fillText(Math.ceil(S.kickoff / 30), cv.width/2 + 3, cv.height/2 + huge * 0.35 + 3);
+    ctx.fillStyle = '#fff';
+    ctx.fillText(Math.ceil(S.kickoff / 30), cv.width/2, cv.height/2 + huge * 0.35);
+  }
+}
+
+/* ============================================================
+   PHONE TO PHONE
+   The host runs the whole match and posts positions; the guest
+   sends only which way its thumb is pushing. STUN alone works on
+   one wifi and fails across networks, so there are TURN relays
+   as a fallback - that is what makes this work on mobile data.
+   ============================================================ */
+let peer = null, conn = null, connectTimer = null, wakeLock = null;
+const PREFIX = 'stelladad-';
 const setConn = t => { document.getElementById('conn').textContent = t; };
 const netMsg = t => { document.getElementById('netMsg').textContent = t; };
+const peerAvailable = () => typeof Peer !== 'undefined';
 
-/* Stop the phone sleeping while it is hosting - a locked screen
-   kills the connection and the other player just sees it hang. */
 async function keepAwake(){
   try { if(navigator.wakeLock) wakeLock = await navigator.wakeLock.request('screen'); } catch(e){}
 }
-function letSleep(){
-  try { if(wakeLock) wakeLock.release(); } catch(e){}
-  wakeLock = null;
-}
+function letSleep(){ try { if(wakeLock) wakeLock.release(); } catch(e){} wakeLock = null; }
 document.addEventListener('visibilitychange', () => {
-  if(document.visibilityState === 'visible' && (state.mode === 'host' || state.mode === 'guest')) keepAwake();
+  if(document.visibilityState === 'visible' && (S.mode === 'host' || S.mode === 'guest')) keepAwake();
 });
-
 function startTimeout(msg){
   clearTimeout(connectTimer);
   connectTimer = setTimeout(() => { if(!(conn && conn.open)) netMsg(msg); }, CONNECT_TIMEOUT);
@@ -692,11 +887,9 @@ function clearTimeoutMsg(){ clearTimeout(connectTimer); connectTimer = null; }
 function makeCode(){
   const abc = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let s = '';
-  for(let i = 0; i < 4; i++) s += abc[Math.floor(Math.random()*abc.length)];
+  for(let i = 0; i < 4; i++) s += abc[Math.floor(Math.random() * abc.length)];
   return s;
 }
-
-function peerAvailable(){ return typeof Peer !== 'undefined'; }
 
 function host(){
   if(!peerAvailable()) return netMsg('Online play needs the internet - open the hosted version of this page.');
@@ -705,39 +898,35 @@ function host(){
   netMsg('Opening room...');
   keepAwake();
   peer = new Peer(PREFIX + code, PEER_CONFIG);
-
   peer.on('open', () => {
     netMsg('Room ' + code + ' is open. Keep this screen on.');
-    startTimeout('Still waiting. Make sure they typed ' + code + ' exactly, and that this screen has stayed on.');
+    startTimeout('Still waiting. Check they typed ' + code + ' exactly, and that this screen has stayed on.');
   });
-
   peer.on('error', e => {
-    if(e.type === 'unavailable-id'){
-      netMsg('That code was already taken. Tap Back and host again.');
-    } else if(e.type === 'network' || e.type === 'server-error'){
-      netMsg('Cannot reach the matchmaking server. Check your internet and try again.');
-    } else {
-      netMsg('Problem: ' + e.type + '. Tap Back, then Host again.');
-    }
+    if(e.type === 'unavailable-id') netMsg('That code was taken. Tap Back and host again.');
+    else if(e.type === 'network' || e.type === 'server-error') netMsg('Cannot reach the matchmaking server. Check your internet.');
+    else netMsg('Problem: ' + e.type + '. Tap Back, then Host again.');
   });
-
   peer.on('connection', c => {
-    conn = c;
-    clearTimeoutMsg();
-    netMsg('Someone is joining...');
+    conn = c; clearTimeoutMsg(); netMsg('Someone is joining...');
     c.on('open', () => {
-      netMsg('Connected!');
-      setConn('online');
+      netMsg('Connected!'); setConn('online');
+      c.send({ t:'size', n:S.teamSize });
       startGame('host');
     });
-    c.on('data', d => { if(d.t === 'in'){ input[2].x = d.x; input[2].y = d.y; input[2].dash = d.d; } });
+    c.on('data', d => {
+      if(d.t === 'in'){
+        input[1].x = d.x; input[1].y = d.y;
+        if(d.p && S.carrier && S.carrier.team === S.teams[1]) doPass(S.carrier);
+        if(d.k && S.carrier && S.carrier.team === S.teams[1]) doShoot(S.carrier);
+      }
+    });
     c.on('close', () => { setConn('they left'); letSleep(); showMenu(); });
-    c.on('error', () => { setConn('connection lost'); });
   });
 }
 
 function join(){
-  if(!peerAvailable()) return netMsg('Online play needs the internet - use the hosted version of this page.');
+  if(!peerAvailable()) return netMsg('Online play needs the internet - open the hosted version of this page.');
   const code = (document.getElementById('joinInput').value || '').toUpperCase().trim();
   if(code.length !== 4) return netMsg('Type the 4 character code.');
   netMsg('Looking for room ' + code + '...');
@@ -745,103 +934,153 @@ function join(){
   peer = new Peer(undefined, PEER_CONFIG);
   startTimeout('Could not reach them. Usually that means one of you is on a different network - try both on the same wifi, or ask them to host again.');
   peer.on('open', () => {
-    conn = peer.connect(PREFIX + code, { reliable: false });
+    conn = peer.connect(PREFIX + code, { reliable:false });
     netMsg('Found the room. Connecting...');
     conn.on('open', () => { clearTimeoutMsg(); netMsg('Connected!'); setConn('online'); startGame('guest'); });
     conn.on('data', d => {
-      if(d.t === 's'){
-        state.p1.x = d.a[0]; state.p1.y = d.a[1]; state.p1.fx = d.a[2]; state.p1.fy = d.a[3]; state.p1.charge = d.a[4];
-        state.p2.x = d.b[0]; state.p2.y = d.b[1]; state.p2.fx = d.b[2]; state.p2.fy = d.b[3]; state.p2.charge = d.b[4];
-        state.ball.x = d.k[0]; state.ball.y = d.k[1];
-        state.s1 = d.s[0]; state.s2 = d.s[1]; state.kickoff = d.o;
-      } else if(d.t === 'over'){ state.s1 = d.s1; state.s2 = d.s2; finish(); }
-      else if(d.t === 'again'){ document.getElementById('result').style.display = 'none'; state.over = false; state.s1 = state.s2 = 0; reset(); }
+      if(d.t === 's') applyState(d);
+      else if(d.t === 'size'){ S.teamSize = d.n; buildTeams(); kickoff(); }
+      else if(d.t === 'over'){ S.teams[0].score = d.a; S.teams[1].score = d.b; finish(); }
+      else if(d.t === 'again'){
+        document.getElementById('result').style.display = 'none';
+        S.over = false; S.teams.forEach(t => t.score = 0); kickoff();
+      }
     });
     conn.on('close', () => { setConn('they left'); letSleep(); showMenu(); });
     conn.on('error', () => netMsg('Lost the connection. Tap Back and try again.'));
   });
   peer.on('error', e => {
     clearTimeoutMsg();
-    if(e.type === 'peer-unavailable'){
-      netMsg('Nobody is hosting ' + code + '. Check the code, and make sure they are still on the waiting screen.');
-    } else if(e.type === 'network' || e.type === 'server-error'){
-      netMsg('Cannot reach the matchmaking server. Check your internet and try again.');
-    } else {
-      netMsg('Problem: ' + e.type + '. Tap Back and try again.');
-    }
+    if(e.type === 'peer-unavailable') netMsg('Nobody is hosting ' + code + '. Check the code, and that they are still on the waiting screen.');
+    else if(e.type === 'network' || e.type === 'server-error') netMsg('Cannot reach the matchmaking server. Check your internet.');
+    else netMsg('Problem: ' + e.type + '. Tap Back and try again.');
   });
 }
 
-function sendState(){
-  if(!conn || !conn.open) return;
-  netTick++;
-  if(netTick % 2) return;   // ~30 updates a second
-  const r = n => Math.round(n * 10) / 10;
-  conn.send({
-    t:'s',
-    a:[r(state.p1.x), r(state.p1.y), r(state.p1.fx), r(state.p1.fy), Math.round(state.p1.charge)],
-    b:[r(state.p2.x), r(state.p2.y), r(state.p2.fx), r(state.p2.fy), Math.round(state.p2.charge)],
-    k:[r(state.ball.x), r(state.ball.y)],
-    s:[state.s1, state.s2],
-    o:state.kickoff
-  });
-}
-function sendInput(){
-  if(!conn || !conn.open) return;
-  netTick++;
-  if(netTick % 2) return;
-  conn.send({ t:'in', x:input[2].x, y:input[2].y, d:input[2].dash });
+if(!peerAvailable()){
+  document.getElementById('menuNote').textContent =
+    'Phone-to-phone needs the hosted version of this page. Same-screen and vs-computer work right here.';
 }
 
-/* ---------- loop & menu ---------- */
+/* ============================================================
+   CONTROLS, MENUS, NETWORK
+   ============================================================ */
+function bindStick(el){
+  const knob = el.querySelector('.knob');
+  let id = null, cx = 0, cy = 0;
+  const R = 46;
+  const start = e => {
+    const t = e.changedTouches[0];
+    id = t.identifier;
+    const r = el.getBoundingClientRect();
+    cx = r.left + r.width/2; cy = r.top + r.height/2;
+    move(e); e.preventDefault();
+  };
+  const move = e => {
+    const t = Array.from(e.changedTouches).find(x => x.identifier === id);
+    if(!t) return;
+    let dx = t.clientX - cx, dy = t.clientY - cy;
+    const d = Math.hypot(dx, dy) || 1, cl = Math.min(d, R);
+    dx = dx/d*cl; dy = dy/d*cl;
+    knob.style.transform = 'translate(' + dx + 'px,' + dy + 'px)';
+    touch.x = dx / R; touch.y = dy / R;
+    e.preventDefault();
+  };
+  const end = () => { id = null; knob.style.transform = ''; touch.x = 0; touch.y = 0; };
+  el.addEventListener('touchstart', start, {passive:false});
+  el.addEventListener('touchmove', move, {passive:false});
+  el.addEventListener('touchend', end);
+  el.addEventListener('touchcancel', end);
+}
+bindStick(document.getElementById('stick1'));
+
+function bindAction(id, key){
+  const el = document.getElementById(id);
+  const on = e => { e.preventDefault(); touch[key] = true; SFX.unlock(); };
+  const off = () => { touch[key] = false; };
+  el.addEventListener('touchstart', on, {passive:false});
+  el.addEventListener('touchend', off);
+  el.addEventListener('touchcancel', off);
+  el.addEventListener('mousedown', on);
+  el.addEventListener('mouseup', off);
+  el.addEventListener('mouseleave', off);
+}
+bindAction('btnPass', 'pass');
+bindAction('btnShoot', 'shoot');
+if(matchMedia('(pointer:coarse)').matches || 'ontouchstart' in window) document.body.classList.add('touch');
+addEventListener('touchstart', () => document.body.classList.add('touch'), { once:true, passive:true });
+
+/* ---------- loop ---------- */
 function frame(){
-  if(state.running){
-    readKeys();
-    if(state.mode === 'guest'){ sendInput(); }
-    else if(!state.over){ simulate(); if(state.mode === 'host') sendState(); }
-    draw();
-  }
+  if(S.running && !S.over) simulate(1/60);
+  if(S.mode === 'host') sendState(); else if(S.mode === 'guest') sendInput();
+  draw();
   requestAnimationFrame(frame);
 }
 
+function finish(){
+  S.over = true;
+  const mine = S.mode === 'guest' ? 1 : 0;
+  const won = S.teams[mine].score > S.teams[1 - mine].score;
+  document.getElementById('resultTitle').textContent =
+    S.mode === 'local' ? (S.teams[0].score > S.teams[1].score ? 'Orange wins!' : 'Blue wins!')
+                       : (won ? 'You win!' : 'You lose');
+  document.getElementById('resultText').textContent = S.teams[0].score + ' - ' + S.teams[1].score;
+  document.getElementById('result').style.display = 'flex';
+  if(conn && conn.open) conn.send({ t:'over', a:S.teams[0].score, b:S.teams[1].score });
+}
+
 function startGame(mode){
-  state.mode = mode;
-  state.s1 = 0; state.s2 = 0; state.over = false;
-  reset();
+  S.mode = mode; S.over = false;
+  buildTeams(); kickoff();
   document.getElementById('menu').style.display = 'none';
   document.getElementById('result').style.display = 'none';
-  document.body.classList.toggle('solo', mode !== 'local');
-  const names = nameFor();
   document.getElementById('hint').textContent =
-    mode === 'local' ? 'Orange: W A S D + Shift   |   Blue: arrows + Enter'
-    : mode === 'solo' ? 'W A S D or the stick. Hold Shift / DASH to charge.'
-    : 'You are ' + (mode === 'host' ? 'ORANGE (left)' : 'BLUE (right)');
-  state.running = true;
+    mode === 'local' ? 'Orange: WASD, J pass, K shoot   |   Blue: arrows, . pass, / shoot'
+                     : 'WASD or the stick. J / PASS to pass, K / SHOOT to shoot.';
+  S.running = true;
   fit();
+  SFX.unlock();
 }
 
 function showMenu(){
-  state.running = false;
+  S.running = false;
   document.getElementById('menu').style.display = 'flex';
   document.getElementById('result').style.display = 'none';
   document.getElementById('codeBox').style.display = 'none';
+  document.getElementById('code').style.display = '';
   document.querySelectorAll('#menu .big').forEach(b => { if(b.id !== 'btnBack') b.style.display = ''; });
-  document.getElementById('joinInput')?.remove();
-  clearTimeoutMsg();
-  letSleep();
+  document.querySelector('.row').style.display = 'flex';
+  const ji = document.getElementById('joinInput'); if(ji) ji.remove();
+  const jb = document.getElementById('joinGo'); if(jb) jb.remove();
+  clearTimeoutMsg(); letSleep();
   if(peer){ try{ peer.destroy(); }catch(e){} peer = null; conn = null; }
   setConn('');
 }
 
-document.getElementById('btnLocal').onclick = () => startGame('local');
+document.querySelectorAll('.pill').forEach(b => b.onclick = () => {
+  document.querySelectorAll('.pill').forEach(x => x.classList.remove('on'));
+  b.classList.add('on');
+  S.teamSize = parseInt(b.dataset.size, 10);
+});
 document.getElementById('btnSolo').onclick  = () => startGame('solo');
+document.getElementById('btnLocal').onclick = () => startGame('local');
+document.getElementById('menuBtn').onclick  = showMenu;
+document.getElementById('menuBtn2').onclick = showMenu;
+document.getElementById('againBtn').onclick = () => {
+  S.teams.forEach(t => t.score = 0); S.over = false; kickoff();
+  document.getElementById('result').style.display = 'none';
+  if(conn && conn.open) conn.send({ t:'again' });
+};
 document.getElementById('btnHost').onclick = () => {
   document.querySelectorAll('#menu .big').forEach(b => { if(b.id !== 'btnBack') b.style.display = 'none'; });
+  document.querySelector('.row').style.display = 'none';
   document.getElementById('codeBox').style.display = 'flex';
   host();
 };
 document.getElementById('btnJoin').onclick = () => {
   document.querySelectorAll('#menu .big').forEach(b => { if(b.id !== 'btnBack') b.style.display = 'none'; });
+  document.querySelector('.row').style.display = 'none';
   const box = document.getElementById('codeBox');
   box.style.display = 'flex';
   document.getElementById('code').style.display = 'none';
@@ -850,29 +1089,51 @@ document.getElementById('btnJoin').onclick = () => {
     inp.id = 'joinInput'; inp.maxLength = 4; inp.placeholder = 'CODE';
     box.insertBefore(inp, box.firstChild);
     const go = document.createElement('button');
-    go.className = 'big'; go.textContent = 'Join'; go.onclick = join;
+    go.id = 'joinGo'; go.className = 'big'; go.textContent = 'Join'; go.onclick = join;
     box.insertBefore(go, document.getElementById('netMsg'));
     inp.focus();
   }
 };
 document.getElementById('btnBack').onclick = () => { document.getElementById('code').style.display = ''; showMenu(); };
-document.getElementById('menuBtn').onclick = showMenu;
-document.getElementById('menuBtn2').onclick = showMenu;
-document.getElementById('againBtn').onclick = () => {
-  state.s1 = 0; state.s2 = 0; state.over = false; reset();
-  document.getElementById('result').style.display = 'none';
-  if(conn && conn.open) conn.send({ t:'again' });
-};
 
-if(!peerAvailable()){
-  document.getElementById('menuNote').textContent =
-    'Online play is unavailable here (no connection to the matchmaking server). Same-screen and computer modes work fine.';
+/* ---------- network payloads ---------- */
+let netTick = 0;
+function sendState(){
+  if(!conn || !conn.open) return;
+  if(++netTick % 2) return;
+  const r = n => Math.round(n * 10) / 10;
+  conn.send({
+    t:'s',
+    p: S.teams.map(t => t.players.map(p => [r(p.x), r(p.y), r(p.fx), r(p.fy)])),
+    k: S.teams.map(t => [r(t.keeper.x), r(t.keeper.y)]),
+    b: [r(S.ball.x), r(S.ball.y)],
+    s: [S.teams[0].score, S.teams[1].score],
+    o: S.kickoff,
+    n: S.teamSize
+  });
+}
+function sendInput(){
+  if(!conn || !conn.open) return;
+  if(++netTick % 2) return;
+  conn.send({ t:'in', x:input[1].x, y:input[1].y, p:input[1].passHit, k:input[1].shootHit });
+}
+function applyState(d){
+  if(d.n && d.n !== S.teamSize){ S.teamSize = d.n; buildTeams(); }
+  d.p.forEach((team, i) => team.forEach((a, j) => {
+    const p = S.teams[i] && S.teams[i].players[j];
+    if(p){ p.x = a[0]; p.y = a[1]; p.fx = a[2]; p.fy = a[3]; }
+  }));
+  d.k.forEach((a, i) => { if(S.teams[i]){ S.teams[i].keeper.x = a[0]; S.teams[i].keeper.y = a[1]; } });
+  S.ball.x = d.b[0]; S.ball.y = d.b[1];
+  S.teams[0].score = d.s[0]; S.teams[1].score = d.s[1];
+  S.kickoff = d.o;
 }
 
-reset();
 fit();
-draw();
+buildTeams();
+kickoff();
 frame();
+
 </script>
 </body>
 </html>
