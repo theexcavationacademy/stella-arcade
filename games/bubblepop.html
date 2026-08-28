@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Bubble Pop</title>
+<style>
+/* ==========================================================
+   TWEAK ME  -  colours here, game numbers in the script
+   ========================================================== */
+:root{
+  --bg:#04212e;          /* deep water */
+  --bg2:#072e40;
+  --text:#e6fbff;
+  --dim:#7fb2c4;
+  --line:#12506b;
+  --accent:#ffd54a;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{
+  background:radial-gradient(760px 620px at 50% 110%,#0a4a63 0%,var(--bg) 70%);
+  color:var(--text);font-family:'Trebuchet MS',system-ui,sans-serif;
+  display:flex;flex-direction:column;align-items:center;
+  overflow:hidden;touch-action:none;user-select:none;
+}
+a{color:#63dcff;text-decoration:none}
+header{width:100%;display:flex;align-items:center;gap:8px;padding:8px 12px;flex:0 0 auto}
+header h1{font-size:15px;letter-spacing:3px;text-transform:uppercase;color:#63dcff;
+  text-shadow:0 0 16px rgba(99,220,255,.45)}
+header .sp{flex:1}
+.btn{background:#0a3a4f;border:1px solid var(--line);color:var(--text);border-radius:10px;
+  padding:7px 11px;font-size:13px;cursor:pointer;font-family:inherit}
+.btn:active{background:#12506b}
+.btn.muted{opacity:.45;text-decoration:line-through}
+
+#stats{display:flex;gap:18px;font-size:12px;color:var(--dim);letter-spacing:1px;
+  text-transform:uppercase;padding-bottom:6px;flex:0 0 auto}
+#stats b{font-size:20px;color:var(--text);letter-spacing:0}
+#stage{flex:1;width:100%;min-height:0;display:flex;justify-content:center;padding:0 8px 8px}
+canvas{
+  border:1px solid var(--line);border-radius:16px;
+  background:linear-gradient(180deg,#062b3c 0%,#04212e 100%);
+  box-shadow:0 18px 50px rgba(0,0,0,.5), inset 0 0 60px rgba(0,0,0,.35);
+  max-width:100%;max-height:100%;
+}
+#hint{font-size:12px;color:var(--dim);padding-bottom:10px;flex:0 0 auto;text-align:center}
+
+#over{position:fixed;inset:0;background:rgba(4,33,46,.94);display:none;flex-direction:column;
+  align-items:center;justify-content:center;gap:14px;text-align:center;padding:24px;z-index:20}
+#over h2{font-size:30px;color:var(--accent)}
+#over p{color:var(--dim);font-size:14px;line-height:1.6;max-width:320px}
+#over .big{background:var(--accent);color:#22190a;border:none;font-weight:bold;padding:14px 28px;
+  font-size:16px;border-radius:12px;font-family:inherit;cursor:pointer}
+</style>
+</head>
+<body>
+
+<header>
+  <a class="btn" href="../index.html">&#8592; Arcade</a>
+  <h1>Bubble Pop</h1>
+  <span class="sp"></span>
+  <button class="btn" id="sndBtn" title="Sound on/off">&#9834; ON</button>
+  <button class="btn" id="newBtn">New</button>
+</header>
+
+<div id="stats">
+  <span>Score <b id="score">0</b></span>
+  <span>Best <b id="best">0</b></span>
+  <span>Shots to drop <b id="shots">6</b></span>
+</div>
+
+<div id="stage"><canvas id="cv"></canvas></div>
+<div id="hint">Aim with your finger or the mouse, let go to fire. Three of a colour pops.</div>
+
+<div id="over">
+  <h2 id="overTitle"></h2>
+  <p id="overText"></p>
+  <button class="big" id="overBtn">Play again</button>
+</div>
+
+<script>
+/* ============================================================
+   SOUND  -  every noise in this arcade is made by maths, not
+   by audio files. That's why the whole game is one small file.
+   Tap the music note in the top bar to turn sound off.
+   ============================================================ */
+const SFX = (function(){
+  let ctx = null, on = true;
+  try { on = localStorage.getItem('arcade_sound') !== 'off'; } catch(e){}
+
+  function ac(){
+    if(!ctx){
+      try { ctx = new (window.AudioContext || window.webkitAudioContext)(); }
+      catch(e){ return null; }
+    }
+    if(ctx.state === 'suspended') ctx.resume();
+    return ctx;
+  }
+
+  // one beep: f = start pitch, f2 = pitch to slide to, d = seconds
+  function tone(o){
+    if(!on) return;
+    const c = ac(); if(!c) return;
+    const t0 = c.currentTime + (o.delay || 0);
+    const osc = c.createOscillator(), g = c.createGain();
+    osc.type = o.type || 'square';
+    osc.frequency.setValueAtTime(o.f, t0);
+    if(o.f2) osc.frequency.exponentialRampToValueAtTime(Math.max(20, o.f2), t0 + o.d);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(o.v || 0.14, t0 + 0.006);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + o.d);
+    osc.connect(g); g.connect(c.destination);
+    osc.start(t0); osc.stop(t0 + o.d + 0.03);
+  }
+
+  // static-ish burst, good for thuds, kicks and explosions
+  function noise(o){
+    if(!on) return;
+    const c = ac(); if(!c) return;
+    const t0 = c.currentTime + (o.delay || 0);
+    const len = Math.floor(c.sampleRate * o.d);
+    const buf = c.createBuffer(1, len, c.sampleRate);
+    const data = buf.getChannelData(0);
+    for(let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = c.createBufferSource(); src.buffer = buf;
+    const flt = c.createBiquadFilter();
+    flt.type = o.hp ? 'highpass' : 'lowpass';
+    flt.frequency.setValueAtTime(o.cut || 1200, t0);
+    const g = c.createGain();
+    g.gain.setValueAtTime(o.v || 0.14, t0);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + o.d);
+    src.connect(flt); flt.connect(g); g.connect(c.destination);
+    src.start(t0);
+  }
+
+  // a little run of notes
+  function seq(notes, type, step, d, v){
+    notes.forEach((f, i) => tone({ f, d: d || 0.10, type: type || 'triangle', delay: i * (step || 0.07), v: v || 0.13 }));
+  }
+
+  const LIB = {
+    click:  () => tone({ f:660, d:.04, v:.10 }),
+    move:   () => tone({ f:300, d:.03, v:.06 }),
+    rotate: () => tone({ f:460, f2:600, d:.05, v:.09 }),
+    lock:   () => tone({ f:150, d:.06, type:'triangle', v:.12 }),
+    drop:   () => { tone({ f:260, f2:70, d:.12, type:'sawtooth', v:.12 }); noise({ d:.06, cut:900, v:.10 }); },
+    hold:   () => tone({ f:520, f2:400, d:.07, type:'triangle' }),
+
+    // line clears get brighter the more lines you take at once
+    clear1: () => seq([523, 784], 'triangle', .06, .10),
+    clear2: () => seq([523, 659, 880], 'triangle', .055, .10),
+    clear3: () => seq([523, 659, 880, 1047], 'triangle', .05, .10),
+    clear4: () => seq([523, 659, 880, 1047, 1319], 'square', .05, .12, .15),
+
+    bomb:   () => { noise({ d:.42, cut:700, v:.24 }); tone({ f:180, f2:35, d:.42, type:'sawtooth', v:.18 }); },
+    eat:    () => tone({ f:520, f2:820, d:.08, type:'square', v:.12 }),
+    gold:   () => seq([784, 988, 1319], 'square', .055, .09, .13),
+    die:    () => { tone({ f:320, f2:60, d:.55, type:'sawtooth', v:.16 }); noise({ d:.3, cut:500, v:.12, delay:.05 }); },
+
+    place:  () => tone({ f:340, f2:420, d:.05, type:'triangle', v:.10 }),
+    bad:    () => { tone({ f:200, d:.10, type:'square', v:.12 }); tone({ f:150, d:.14, type:'square', v:.12, delay:.09 }); },
+    hint:   () => seq([880, 1175], 'sine', .06, .09, .12),
+
+    kick:   () => { noise({ d:.05, cut:2200, hp:true, v:.16 }); tone({ f:190, f2:110, d:.07, type:'triangle', v:.14 }); },
+    dash:   () => tone({ f:200, f2:900, d:.18, type:'sawtooth', v:.13 }),
+    bounce: () => tone({ f:420, d:.03, v:.07 }),
+    goal:   () => seq([659, 784, 1047], 'square', .09, .14, .15),
+    shoot:  () => tone({ f:300, f2:720, d:.06, type:'square', v:.10 }),
+    pop:    () => tone({ f:700, f2:1300, d:.07, type:'sine', v:.14 }),
+    fall:   () => tone({ f:600, f2:180, d:.20, type:'sine', v:.10 }),
+    combo:  () => seq([880, 1175, 1568], 'sine', .05, .08, .13),
+
+    win:    () => seq([523, 659, 784, 1047, 1319], 'square', .10, .16, .15),
+    lose:   () => seq([392, 330, 262], 'sawtooth', .13, .22, .13),
+    start:  () => seq([523, 784], 'square', .07, .09, .11)
+  };
+
+  // pitch-shifted pop, so a long chain of pops climbs the scale
+  function popAt(n){
+    if(!on) return;
+    const base = 620 * Math.pow(1.09, Math.min(n, 14));
+    tone({ f: base, f2: base * 1.9, d:.07, type:'sine', v:.14 });
+  }
+
+  const api = {
+    play(name){ const f = LIB[name]; if(f) f(); },
+    popAt,
+    get on(){ return on; },
+    unlock(){ ac(); },
+    toggle(){
+      on = !on;
+      try { localStorage.setItem('arcade_sound', on ? 'on' : 'off'); } catch(e){}
+      if(on) LIB.click();
+      return on;
+    }
+  };
+
+  // browsers only allow sound after the player touches something
+  const wake = () => api.unlock();
+  window.addEventListener('pointerdown', wake, { once:false });
+  window.addEventListener('keydown', wake, { once:false });
+
+  // hook up the toggle button in the top bar, if this page has one
+  function mount(){
+    const btn = document.getElementById('sndBtn');
+    if(!btn) return;
+    const paint = () => {
+      btn.textContent = on ? '♪ ON' : '♪ OFF';
+      btn.classList.toggle('muted', !on);
+      btn.setAttribute('aria-label', on ? 'Sound is on' : 'Sound is off');
+    };
+    btn.addEventListener('click', () => { api.unlock(); api.toggle(); paint(); });
+    paint();
+  }
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount);
+  else mount();
+
+  return api;
+})();
+
+/* ============================================================
+   BUBBLE POP
+   Fire bubbles up the screen. Land three or more of the same
+   colour together and they pop. Anything left hanging with
+   nothing above it falls too - that's where the big scores are.
+   ============================================================ */
+
+/* ---------- TWEAK ME ---------- */
+const COLS = 9;             // bubbles across the top row
+const START_ROWS = 5;       // how many rows you start with
+const SHOTS_PER_DROP = 6;   // shots before a new row pushes down
+const SPEED = 15;           // how fast a fired bubble travels
+const MATCH = 3;            // how many of a colour it takes to pop
+const PALETTE = ['#ff5f7e','#ffd54a','#5ce1a0','#5ab9ff','#c58bff'];
+/* ------------------------------ */
+
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+const stage = document.getElementById('stage');
+
+let R = 20, rowH = 34, deadline = 0;
+let grid = [];          // grid[row][col] = colour index or null
+let shot = null;        // the bubble in flight
+let falling = [];       // bubbles dropping off the board
+let pops = [];          // little burst animations
+let current, next;      // colour indices in the launcher and on deck
+let aim = -Math.PI / 2; // straight up
+let score = 0, best = 0, shotsLeft = SHOTS_PER_DROP, playing = true;
+
+const store = {
+  get(k, d){ try{ const v = localStorage.getItem(k); return v === null ? d : v; }catch(e){ return d; } },
+  set(k, v){ try{ localStorage.setItem(k, v); }catch(e){} }
+};
+best = parseInt(store.get('bubble_best','0'), 10) || 0;
+
+const colsIn = r => (r % 2 === 0) ? COLS : COLS - 1;
+const cellX  = (r, c) => R + c * 2 * R + (r % 2 ? R : 0);
+const cellY  = r => R + r * rowH;
+
+function inBounds(r, c){ return r >= 0 && r < grid.length && c >= 0 && c < colsIn(r); }
+
+function neighbours(r, c){
+  const odd = r % 2 === 1;
+  const out = [
+    [r, c-1], [r, c+1],
+    [r-1, odd ? c : c-1], [r-1, odd ? c+1 : c],
+    [r+1, odd ? c : c-1], [r+1, odd ? c+1 : c]
+  ];
+  return out.filter(([rr, cc]) => inBounds(rr, cc));
+}
+
+function coloursOnBoard(){
+  const set = new Set();
+  grid.forEach(row => row.forEach(v => { if(v !== null && v !== undefined) set.add(v); }));
+  return [...set];
+}
+
+function pickColour(){
+  const live = coloursOnBoard();
+  if(!live.length) return Math.floor(Math.random() * PALETTE.length);
+  return live[Math.floor(Math.random() * live.length)];
+}
+
+function newRow(){
+  return Array.from({length: COLS}, () => Math.floor(Math.random() * PALETTE.length));
+}
+
+function start(){
+  grid = [];
+  for(let r = 0; r < START_ROWS; r++){
+    const row = [];
+    for(let c = 0; c < colsIn(grid.length); c++) row.push(Math.floor(Math.random() * PALETTE.length));
+    grid.push(row);
+  }
+  score = 0; shotsLeft = SHOTS_PER_DROP; playing = true;
+  shot = null; falling = []; pops = [];
+  current = pickColour(); next = pickColour();
+  document.getElementById('over').style.display = 'none';
+  fit();
+  updateStats();
+}
+
+function updateStats(){
+  document.getElementById('score').textContent = score;
+  document.getElementById('best').textContent = best;
+  document.getElementById('shots').textContent = shotsLeft;
+}
+
+/* ---------- firing ---------- */
+function fire(){
+  if(shot || !playing) return;
+  shot = {
+    x: cv.width / 2, y: cv.height - R * 2.2,
+    vx: Math.cos(aim) * SPEED, vy: Math.sin(aim) * SPEED,
+    col: current
+  };
+  current = next; next = pickColour();
+  SFX.play('shoot');
+}
+
+function stepShot(){
+  if(!shot) return;
+  const steps = Math.ceil(SPEED / (R * 0.4));
+  for(let i = 0; i < steps; i++){
+    shot.x += shot.vx / steps;
+    shot.y += shot.vy / steps;
+    if(shot.x < R){ shot.x = R; shot.vx *= -1; SFX.play('bounce'); }
+    if(shot.x > cv.width - R){ shot.x = cv.width - R; shot.vx *= -1; SFX.play('bounce'); }
+    if(shot.y <= R){ landAt(0); return; }
+    // did we touch anything?
+    for(let r = 0; r < grid.length; r++)
+      for(let c = 0; c < colsIn(r); c++){
+        if(grid[r][c] === null) continue;
+        const dx = shot.x - cellX(r, c), dy = shot.y - cellY(r);
+        if(dx*dx + dy*dy < (R * 1.85) * (R * 1.85)){ landAt(r, c); return; }
+      }
+    if(shot.y > cv.height + R){ shot = null; return; }
+  }
+}
+
+// snap the flying bubble into the nearest free slot
+function landAt(hitR, hitC){
+  const b = shot; shot = null;
+  let bestCell = null, bestD = Infinity;
+
+  const consider = (r, c) => {
+    if(r < 0 || c < 0) return;
+    while(grid.length <= r) grid.push(Array(colsIn(grid.length)).fill(null));
+    if(c >= colsIn(r)) return;
+    if(grid[r][c] !== null) return;
+    const dx = b.x - cellX(r, c), dy = b.y - cellY(r);
+    const d = dx*dx + dy*dy;
+    if(d < bestD){ bestD = d; bestCell = [r, c]; }
+  };
+
+  if(hitC === undefined){
+    for(let c = 0; c < colsIn(0); c++) consider(0, c);
+  } else {
+    consider(hitR, hitC);                      // just in case it's free
+    neighbours(hitR, hitC).forEach(([r, c]) => consider(r, c));
+    // one row below the board is still a legal landing spot
+    if(hitR + 1 >= grid.length){ consider(hitR + 1, hitC); consider(hitR + 1, hitC + 1); }
+  }
+  if(!bestCell){ return; }
+
+  const [r, c] = bestCell;
+  grid[r][c] = b.col;
+  resolve(r, c);
+}
+
+function sameColourGroup(r, c){
+  const target = grid[r][c];
+  const seen = new Set([r + ',' + c]);
+  const stack = [[r, c]], out = [[r, c]];
+  while(stack.length){
+    const [cr, cc] = stack.pop();
+    for(const [nr, nc] of neighbours(cr, cc)){
+      const key = nr + ',' + nc;
+      if(seen.has(key)) continue;
+      if(grid[nr][nc] !== target) continue;
+      seen.add(key); stack.push([nr, nc]); out.push([nr, nc]);
+    }
+  }
+  return out;
+}
+
+function resolve(r, c){
+  const group = sameColourGroup(r, c);
+  if(group.length >= MATCH){
+    group.forEach(([rr, cc], i) => {
+      burst(cellX(rr, cc), cellY(rr), PALETTE[grid[rr][cc]]);
+      grid[rr][cc] = null;
+      SFX.popAt(i);
+    });
+    score += group.length * 10;
+    const loose = dropFloaters();
+    if(loose > 0){ score += loose * 20; SFX.play('combo'); }
+  } else {
+    SFX.play('place');
+  }
+
+  shotsLeft--;
+  if(shotsLeft <= 0){ pushRow(); shotsLeft = SHOTS_PER_DROP; }
+  trimEmptyRows();
+  updateStats();
+  checkEnd();
+}
+
+// anything not hanging from the ceiling falls away
+function dropFloaters(){
+  const safe = new Set();
+  const stack = [];
+  for(let c = 0; c < colsIn(0); c++)
+    if(grid[0] && grid[0][c] !== null){ safe.add('0,' + c); stack.push([0, c]); }
+  while(stack.length){
+    const [r, c] = stack.pop();
+    for(const [nr, nc] of neighbours(r, c)){
+      const key = nr + ',' + nc;
+      if(safe.has(key) || grid[nr][nc] === null) continue;
+      safe.add(key); stack.push([nr, nc]);
+    }
+  }
+  let n = 0;
+  for(let r = 0; r < grid.length; r++)
+    for(let c = 0; c < colsIn(r); c++){
+      if(grid[r][c] === null) continue;
+      if(safe.has(r + ',' + c)) continue;
+      falling.push({ x: cellX(r, c), y: cellY(r), vy: 1 + Math.random()*2,
+                     vx: (Math.random()-0.5)*3, col: grid[r][c] });
+      grid[r][c] = null; n++;
+    }
+  if(n) SFX.play('fall');
+  return n;
+}
+
+function pushRow(){
+  grid.unshift(Array(COLS).fill(null).map(() => Math.floor(Math.random() * PALETTE.length)));
+  // parity flipped for every row, so re-cut any row that is now too long
+  for(let r = 0; r < grid.length; r++){
+    const want = colsIn(r);
+    while(grid[r].length > want) grid[r].pop();
+    while(grid[r].length < want) grid[r].push(null);
+  }
+  SFX.play('lock');
+}
+
+function trimEmptyRows(){
+  while(grid.length && grid[grid.length-1].every(v => v === null)) grid.pop();
+}
+
+function checkEnd(){
+  const empty = grid.every(row => row.every(v => v === null));
+  if(empty || grid.length === 0){
+    playing = false;
+    if(score > best){ best = score; store.set('bubble_best', best); }
+    SFX.play('win');
+    document.getElementById('overTitle').textContent = 'Board cleared!';
+    document.getElementById('overText').textContent = 'Every bubble gone. Score ' + score + '. Best ' + best + '.';
+    document.getElementById('over').style.display = 'flex';
+    return;
+  }
+  for(let r = 0; r < grid.length; r++)
+    for(let c = 0; c < colsIn(r); c++)
+      if(grid[r][c] !== null && cellY(r) + R >= deadline){
+        playing = false;
+        if(score > best){ best = score; store.set('bubble_best', best); }
+        SFX.play('lose');
+        document.getElementById('overTitle').textContent = 'They got through';
+        document.getElementById('overText').textContent = 'The bubbles reached the line. Score ' + score + '. Best ' + best + '.';
+        document.getElementById('over').style.display = 'flex';
+        return;
+      }
+}
+
+/* ---------- effects ---------- */
+function burst(x, y, col){
+  for(let i = 0; i < 6; i++){
+    const a = Math.random() * Math.PI * 2;
+    pops.push({ x, y, vx: Math.cos(a)*3, vy: Math.sin(a)*3, life: 1, col });
+  }
+}
+
+/* ---------- drawing ---------- */
+function bubble(x, y, col, rad){
+  rad = rad || R;
+  const g = ctx.createRadialGradient(x - rad*0.35, y - rad*0.4, rad*0.15, x, y, rad);
+  g.addColorStop(0, '#ffffff');
+  g.addColorStop(0.22, col);
+  g.addColorStop(1, col);
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.arc(x, y, rad * 0.94, 0, 7); ctx.fill();
+  ctx.strokeStyle = 'rgba(0,0,0,.22)'; ctx.lineWidth = Math.max(1, rad*0.08);
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,.55)';
+  ctx.beginPath(); ctx.arc(x - rad*0.32, y - rad*0.36, rad*0.2, 0, 7); ctx.fill();
+}
+
+function draw(){
+  ctx.clearRect(0, 0, cv.width, cv.height);
+
+  // the line you must not let them cross
+  ctx.strokeStyle = 'rgba(255,95,126,.55)'; ctx.lineWidth = 2; ctx.setLineDash([8, 8]);
+  ctx.beginPath(); ctx.moveTo(0, deadline); ctx.lineTo(cv.width, deadline); ctx.stroke();
+  ctx.setLineDash([]);
+
+  for(let r = 0; r < grid.length; r++)
+    for(let c = 0; c < colsIn(r); c++)
+      if(grid[r][c] !== null) bubble(cellX(r, c), cellY(r), PALETTE[grid[r][c]]);
+
+  falling.forEach(f => bubble(f.x, f.y, PALETTE[f.col]));
+
+  pops.forEach(p => {
+    ctx.globalAlpha = Math.max(0, p.life);
+    ctx.fillStyle = p.col;
+    ctx.beginPath(); ctx.arc(p.x, p.y, R * 0.22 * p.life, 0, 7); ctx.fill();
+    ctx.globalAlpha = 1;
+  });
+
+  const ox = cv.width / 2, oy = cv.height - R * 2.2;
+
+  // aiming guide, including the first bounce off a wall
+  if(playing && !shot){
+    let x = ox, y = oy, vx = Math.cos(aim), vy = Math.sin(aim);
+    ctx.strokeStyle = 'rgba(255,255,255,.30)'; ctx.lineWidth = 2; ctx.setLineDash([5, 9]);
+    ctx.beginPath(); ctx.moveTo(x, y);
+    for(let i = 0; i < 200; i++){
+      x += vx * R * 0.5; y += vy * R * 0.5;
+      if(x < R || x > cv.width - R){ vx *= -1; ctx.lineTo(x, y); }
+      if(y < R * 2) break;
+    }
+    ctx.lineTo(x, y); ctx.stroke(); ctx.setLineDash([]);
+  }
+
+  // launcher
+  ctx.fillStyle = 'rgba(255,255,255,.10)';
+  ctx.beginPath(); ctx.arc(ox, oy, R * 1.55, 0, 7); ctx.fill();
+  bubble(ox, oy, PALETTE[current]);
+  bubble(ox + R * 3.1, oy + R * 0.5, PALETTE[next], R * 0.68);
+  ctx.fillStyle = 'rgba(230,251,255,.45)';
+  ctx.font = Math.round(R * 0.55) + 'px Trebuchet MS'; ctx.textAlign = 'center';
+  ctx.fillText('next', ox + R * 3.1, oy + R * 1.9);
+
+  if(shot) bubble(shot.x, shot.y, PALETTE[shot.col]);
+}
+
+function loop(){
+  if(playing) stepShot();
+  falling.forEach(f => { f.vy += 0.55; f.y += f.vy; f.x += f.vx; });
+  falling = falling.filter(f => f.y < cv.height + R * 2);
+  pops.forEach(p => { p.x += p.vx; p.y += p.vy; p.vy += 0.25; p.life -= 0.05; });
+  pops = pops.filter(p => p.life > 0);
+  draw();
+  requestAnimationFrame(loop);
+}
+
+/* ---------- controls ---------- */
+function pointAt(clientX, clientY){
+  const rect = cv.getBoundingClientRect();
+  const x = (clientX - rect.left) * (cv.width / rect.width);
+  const y = (clientY - rect.top)  * (cv.height / rect.height);
+  const ox = cv.width / 2, oy = cv.height - R * 2.2;
+  let a = Math.atan2(y - oy, x - ox);
+  // atan2 gives negative angles for "upwards" on a canvas.
+  // Never let them shoot sideways or downwards.
+  const limit = 0.2;
+  if(a >= 0){                                   // finger is below the launcher
+    a = (x < ox) ? -Math.PI + limit : -limit;
+  } else {
+    if(a > -limit) a = -limit;
+    if(a < -Math.PI + limit) a = -Math.PI + limit;
+  }
+  aim = a;
+}
+
+cv.addEventListener('pointermove', e => { e.preventDefault(); pointAt(e.clientX, e.clientY); }, {passive:false});
+cv.addEventListener('pointerdown', e => { e.preventDefault(); pointAt(e.clientX, e.clientY); }, {passive:false});
+cv.addEventListener('pointerup',   e => { e.preventDefault(); pointAt(e.clientX, e.clientY); fire(); }, {passive:false});
+
+document.addEventListener('keydown', e => {
+  if(e.code === 'ArrowLeft')  { aim = Math.max(-Math.PI + 0.2, aim - 0.05); e.preventDefault(); }
+  if(e.code === 'ArrowRight') { aim = Math.min(-0.2, aim + 0.05); e.preventDefault(); }
+  if(e.code === 'Space')      { fire(); e.preventDefault(); }
+});
+
+document.getElementById('newBtn').onclick = start;
+document.getElementById('overBtn').onclick = start;
+
+/* ---------- sizing ---------- */
+function fit(){
+  const maxW = Math.min(stage.clientWidth, 460);
+  const maxH = stage.clientHeight;
+  // pick a bubble size that fits both directions
+  let r = maxW / (2 * COLS);
+  const neededH = (START_ROWS + 8) * r * 1.732;
+  if(neededH > maxH) r = Math.min(r, maxH / ((START_ROWS + 8) * 1.732));
+  R = Math.max(11, r);
+  rowH = R * 1.732;
+  cv.width  = Math.round(R * 2 * COLS);
+  cv.height = Math.round(Math.min(maxH, R * 2 * COLS * 1.5));
+  cv.style.width = cv.width + 'px';
+  cv.style.height = cv.height + 'px';
+  deadline = cv.height - R * 4.6;
+}
+window.addEventListener('resize', () => { fit(); });
+window.addEventListener('orientationchange', () => setTimeout(fit, 200));
+
+start();
+loop();
+</script>
+</body>
+</html>

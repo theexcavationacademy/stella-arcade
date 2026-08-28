@@ -1,0 +1,1374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Relic Hunter</title>
+<style>
+/* ==========================================================
+   TWEAK ME  -  colours here, game numbers in the script
+   ========================================================== */
+:root{
+  --ink:#160f0a;
+  --panel:#241811;
+  --edge:#4a3423;
+  --paper:#f6ead4;
+  --dim:#b39b7b;
+  --gold:#e8b44a;
+  --danger:#d9553f;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{
+  background:#0d0906;color:var(--paper);
+  font-family:'Trebuchet MS',system-ui,sans-serif;
+  display:flex;flex-direction:column;align-items:center;
+  overflow:hidden;touch-action:none;user-select:none;
+}
+a{color:var(--gold);text-decoration:none}
+header{width:100%;display:flex;align-items:center;gap:8px;padding:6px 10px;flex:0 0 auto;
+  position:relative;z-index:20;background:#0d0906}
+header h1{font-size:14px;letter-spacing:3px;text-transform:uppercase;color:var(--gold)}
+header .sp{flex:1}
+.btn{background:var(--panel);border:1px solid var(--edge);color:var(--paper);border-radius:9px;
+  padding:6px 10px;font-size:13px;cursor:pointer;font-family:inherit}
+.btn:active{background:#33231a}
+.btn.muted{opacity:.45;text-decoration:line-through}
+
+#stage{flex:1;width:100%;min-height:0;display:flex;align-items:center;justify-content:center;padding:0 6px}
+canvas{
+  image-rendering:auto;border:1px solid var(--edge);border-radius:10px;
+  box-shadow:0 14px 40px rgba(0,0,0,.6);max-width:100%;max-height:100%;background:#000;
+}
+
+/* narrator / dialogue box */
+#say{
+  position:absolute;left:50%;transform:translateX(-50%);
+  width:min(720px,94%);background:rgba(22,15,10,.95);
+  border:1px solid var(--edge);border-radius:12px;padding:12px 14px;
+  font-size:15px;line-height:1.5;display:none;z-index:15;cursor:pointer;
+  box-shadow:0 10px 30px rgba(0,0,0,.6);
+}
+#say .who{font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--gold);margin-bottom:5px}
+#say .more{font-size:11px;color:var(--dim);text-align:right;margin-top:6px}
+
+/* bottom bar: inventory + controls */
+#bar{width:100%;max-width:760px;flex:0 0 auto;padding:6px 8px 10px;display:flex;flex-direction:column;gap:8px}
+#inv{display:flex;gap:6px;align-items:center;min-height:44px;overflow-x:auto;padding:2px}
+#inv .slot{
+  flex:0 0 auto;width:44px;height:44px;border:1px solid var(--edge);border-radius:9px;
+  background:var(--panel);display:flex;align-items:center;justify-content:center;cursor:pointer;
+  position:relative;
+}
+#inv .slot.sel{border-color:var(--gold);box-shadow:0 0 0 2px rgba(232,180,74,.35)}
+#inv .slot canvas{width:34px;height:34px;border:0;border-radius:0;box-shadow:none;background:transparent}
+#inv .empty{color:var(--dim);font-size:12px;padding-left:4px}
+#pad{display:flex;gap:8px}
+#pad button{
+  flex:1;background:var(--panel);border:1px solid var(--edge);color:var(--paper);
+  border-radius:12px;padding:13px 0;font-size:15px;font-family:inherit;cursor:pointer;letter-spacing:1px;
+}
+#pad button:active{background:var(--gold);color:#20160a}
+#pad .wide{flex:1.4}
+
+/* menus */
+.screen{
+  position:fixed;inset:0;z-index:30;display:none;flex-direction:column;
+  align-items:center;justify-content:center;gap:16px;text-align:center;padding:24px;overflow:auto;
+  background:radial-gradient(700px 460px at 50% 30%,#3a2416 0%,#0d0906 72%);
+}
+.screen.on{display:flex}
+.screen h2{font-size:clamp(26px,7vw,42px);letter-spacing:3px;color:var(--gold);text-transform:uppercase}
+.screen p{color:var(--dim);font-size:14px;line-height:1.65;max-width:420px}
+.big{background:var(--gold);color:#20160a;border:none;font-weight:bold;padding:14px 26px;
+  font-size:16px;border-radius:12px;font-family:inherit;cursor:pointer;min-width:230px}
+.big.alt{background:var(--panel);color:var(--paper);border:1px solid var(--edge)}
+#picks{display:flex;gap:16px;flex-wrap:wrap;justify-content:center}
+.pick{
+  background:var(--panel);border:2px solid var(--edge);border-radius:16px;padding:12px;
+  cursor:pointer;width:150px;transition:transform .12s ease,border-color .12s ease;
+}
+.pick:hover,.pick:focus-visible{transform:translateY(-4px);border-color:var(--gold);outline:none}
+.pick canvas{width:100%;height:150px;border:0;border-radius:10px;background:#1b120c;box-shadow:none}
+.pick .nm{margin-top:8px;font-size:15px;letter-spacing:1px}
+.pick .sub{font-size:11px;color:var(--dim);margin-top:3px;line-height:1.4}
+#deathTitle{color:var(--danger)}
+</style>
+</head>
+<body>
+
+<header>
+  <a class="btn" href="../index.html">&#8592; Arcade</a>
+  <h1>Relic Hunter</h1>
+  <span class="sp"></span>
+  <span id="chapLabel" style="font-size:11px;color:var(--dim);letter-spacing:1px"></span>
+  <button class="btn" id="sndBtn" title="Sound on/off">&#9834; ON</button>
+  <button class="btn" id="menuBtn">Menu</button>
+</header>
+
+<div id="stage">
+  <canvas id="cv" width="480" height="270"></canvas>
+  <div id="say"><div class="who"></div><div class="txt"></div><div class="more">tap or press space</div></div>
+</div>
+
+<div id="bar">
+  <div id="inv"></div>
+  <div id="pad">
+    <button id="bLeft">&#9664;</button>
+    <button id="bJump">JUMP</button>
+    <button id="bRight">&#9654;</button>
+    <button id="bAct" class="wide">USE</button>
+    <button id="bLook">LOOK</button>
+  </div>
+</div>
+
+<!-- title -->
+<div class="screen on" id="titleScreen">
+  <h2>Relic Hunter</h2>
+  <p>Somewhere under the jungle there is a thing worth more than your life,
+     and a man with a worse hat who wants it first.</p>
+  <button class="big" id="startBtn">Begin</button>
+  <button class="big alt" id="contBtn" style="display:none">Continue</button>
+</div>
+
+<!-- character select -->
+<div class="screen" id="pickScreen">
+  <h2>Who's digging?</h2>
+  <div id="picks">
+    <div class="pick" tabindex="0" data-hero="max">
+      <canvas width="150" height="150"></canvas>
+      <div class="nm">MAX HOLLOWAY</div>
+      <div class="sub">Confident. Frequently wrong. Owns one hat.</div>
+    </div>
+    <div class="pick" tabindex="0" data-hero="rae">
+      <canvas width="150" height="150"></canvas>
+      <div class="nm">RAE CORTEZ</div>
+      <div class="sub">Reads the plaque before pulling the lever.</div>
+    </div>
+  </div>
+  <p>Same temple, same traps. They just complain differently.</p>
+</div>
+
+<!-- death -->
+<div class="screen" id="deathScreen">
+  <h2 id="deathTitle">Well, that's that</h2>
+  <p id="deathText"></p>
+  <button class="big" id="retryBtn">Try that again</button>
+</div>
+
+<!-- pause menu -->
+<div class="screen" id="menuScreen">
+  <h2>Paused</h2>
+  <p id="menuInfo"></p>
+  <button class="big" id="resumeBtn">Back to it</button>
+  <button class="big alt" id="restartBtn">Start over</button>
+</div>
+
+<!-- chapter card / ending -->
+<div class="screen" id="cardScreen">
+  <h2 id="cardTitle"></h2>
+  <p id="cardText"></p>
+  <button class="big" id="cardBtn">Onward</button>
+</div>
+
+<script>
+/* ============================================================
+   SOUND  -  every noise in this arcade is made by maths, not
+   by audio files. That's why the whole game is one small file.
+   Tap the music note in the top bar to turn sound off.
+   ============================================================ */
+const SFX = (function(){
+  let ctx = null, on = true;
+  try { on = localStorage.getItem('arcade_sound') !== 'off'; } catch(e){}
+
+  function ac(){
+    if(!ctx){
+      try { ctx = new (window.AudioContext || window.webkitAudioContext)(); }
+      catch(e){ return null; }
+    }
+    if(ctx.state === 'suspended') ctx.resume();
+    return ctx;
+  }
+
+  // one beep: f = start pitch, f2 = pitch to slide to, d = seconds
+  function tone(o){
+    if(!on) return;
+    const c = ac(); if(!c) return;
+    const t0 = c.currentTime + (o.delay || 0);
+    const osc = c.createOscillator(), g = c.createGain();
+    osc.type = o.type || 'square';
+    osc.frequency.setValueAtTime(o.f, t0);
+    if(o.f2) osc.frequency.exponentialRampToValueAtTime(Math.max(20, o.f2), t0 + o.d);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(o.v || 0.14, t0 + 0.006);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + o.d);
+    osc.connect(g); g.connect(c.destination);
+    osc.start(t0); osc.stop(t0 + o.d + 0.03);
+  }
+
+  // static-ish burst, good for thuds, kicks and explosions
+  function noise(o){
+    if(!on) return;
+    const c = ac(); if(!c) return;
+    const t0 = c.currentTime + (o.delay || 0);
+    const len = Math.floor(c.sampleRate * o.d);
+    const buf = c.createBuffer(1, len, c.sampleRate);
+    const data = buf.getChannelData(0);
+    for(let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = c.createBufferSource(); src.buffer = buf;
+    const flt = c.createBiquadFilter();
+    flt.type = o.hp ? 'highpass' : 'lowpass';
+    flt.frequency.setValueAtTime(o.cut || 1200, t0);
+    const g = c.createGain();
+    g.gain.setValueAtTime(o.v || 0.14, t0);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + o.d);
+    src.connect(flt); flt.connect(g); g.connect(c.destination);
+    src.start(t0);
+  }
+
+  // a little run of notes
+  function seq(notes, type, step, d, v){
+    notes.forEach((f, i) => tone({ f, d: d || 0.10, type: type || 'triangle', delay: i * (step || 0.07), v: v || 0.13 }));
+  }
+
+  const LIB = {
+    click:  () => tone({ f:660, d:.04, v:.10 }),
+    move:   () => tone({ f:300, d:.03, v:.06 }),
+    rotate: () => tone({ f:460, f2:600, d:.05, v:.09 }),
+    lock:   () => tone({ f:150, d:.06, type:'triangle', v:.12 }),
+    drop:   () => { tone({ f:260, f2:70, d:.12, type:'sawtooth', v:.12 }); noise({ d:.06, cut:900, v:.10 }); },
+    hold:   () => tone({ f:520, f2:400, d:.07, type:'triangle' }),
+
+    // line clears get brighter the more lines you take at once
+    clear1: () => seq([523, 784], 'triangle', .06, .10),
+    clear2: () => seq([523, 659, 880], 'triangle', .055, .10),
+    clear3: () => seq([523, 659, 880, 1047], 'triangle', .05, .10),
+    clear4: () => seq([523, 659, 880, 1047, 1319], 'square', .05, .12, .15),
+
+    bomb:   () => { noise({ d:.42, cut:700, v:.24 }); tone({ f:180, f2:35, d:.42, type:'sawtooth', v:.18 }); },
+    eat:    () => tone({ f:520, f2:820, d:.08, type:'square', v:.12 }),
+    gold:   () => seq([784, 988, 1319], 'square', .055, .09, .13),
+    die:    () => { tone({ f:320, f2:60, d:.55, type:'sawtooth', v:.16 }); noise({ d:.3, cut:500, v:.12, delay:.05 }); },
+
+    place:  () => tone({ f:340, f2:420, d:.05, type:'triangle', v:.10 }),
+    bad:    () => { tone({ f:200, d:.10, type:'square', v:.12 }); tone({ f:150, d:.14, type:'square', v:.12, delay:.09 }); },
+    hint:   () => seq([880, 1175], 'sine', .06, .09, .12),
+
+    kick:   () => { noise({ d:.05, cut:2200, hp:true, v:.16 }); tone({ f:190, f2:110, d:.07, type:'triangle', v:.14 }); },
+    dash:   () => tone({ f:200, f2:900, d:.18, type:'sawtooth', v:.13 }),
+    bounce: () => tone({ f:420, d:.03, v:.07 }),
+    goal:   () => seq([659, 784, 1047], 'square', .09, .14, .15),
+    shoot:  () => tone({ f:300, f2:720, d:.06, type:'square', v:.10 }),
+    pop:    () => tone({ f:700, f2:1300, d:.07, type:'sine', v:.14 }),
+    fall:   () => tone({ f:600, f2:180, d:.20, type:'sine', v:.10 }),
+    combo:  () => seq([880, 1175, 1568], 'sine', .05, .08, .13),
+
+    win:    () => seq([523, 659, 784, 1047, 1319], 'square', .10, .16, .15),
+    lose:   () => seq([392, 330, 262], 'sawtooth', .13, .22, .13),
+    start:  () => seq([523, 784], 'square', .07, .09, .11)
+  };
+
+  // pitch-shifted pop, so a long chain of pops climbs the scale
+  function popAt(n){
+    if(!on) return;
+    const base = 620 * Math.pow(1.09, Math.min(n, 14));
+    tone({ f: base, f2: base * 1.9, d:.07, type:'sine', v:.14 });
+  }
+
+  const api = {
+    play(name){ const f = LIB[name]; if(f) f(); },
+    popAt,
+    get on(){ return on; },
+    unlock(){ ac(); },
+    toggle(){
+      on = !on;
+      try { localStorage.setItem('arcade_sound', on ? 'on' : 'off'); } catch(e){}
+      if(on) LIB.click();
+      return on;
+    }
+  };
+
+  // browsers only allow sound after the player touches something
+  const wake = () => api.unlock();
+  window.addEventListener('pointerdown', wake, { once:false });
+  window.addEventListener('keydown', wake, { once:false });
+
+  // hook up the toggle button in the top bar, if this page has one
+  function mount(){
+    const btn = document.getElementById('sndBtn');
+    if(!btn) return;
+    const paint = () => {
+      btn.textContent = on ? '♪ ON' : '♪ OFF';
+      btn.classList.toggle('muted', !on);
+      btn.setAttribute('aria-label', on ? 'Sound is on' : 'Sound is off');
+    };
+    btn.addEventListener('click', () => { api.unlock(); api.toggle(); paint(); });
+    paint();
+  }
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount);
+  else mount();
+
+  return api;
+})();
+
+
+/* ============================================================
+   RELIC HUNTER
+   A side-view adventure: walk, jump, look at things, pick things
+   up, use them on other things. Every room is plain data down in
+   WORLD - copy a room, change the numbers, you've made a level.
+   ============================================================ */
+
+/* ---------- TWEAK ME ---------- */
+const VW = 480, VH = 270;    // the world is drawn at this size, then scaled up
+const GRAV = 0.52;
+const JUMP = 8.4;
+const RUN = 2.0;
+const REACH = 36;            // how close you must stand to use something
+const BOULDER_SPEED = 3.2;
+/* ------------------------------ */
+
+const cv = document.getElementById('cv');
+// ctx is swappable so the same drawing code can render the little
+// inventory icons into their own tiny canvases.
+let ctx = cv.getContext('2d');
+const MAIN_CTX = ctx;
+const ctxRef = { set(g){ ctx = g; } };
+const stage = document.getElementById('stage');
+
+const store = {
+  get(k, d){ try{ const v = localStorage.getItem(k); return v === null ? d : v; }catch(e){ return d; } },
+  set(k, v){ try{ localStorage.setItem(k, v); }catch(e){} },
+  del(k){ try{ localStorage.removeItem(k); }catch(e){} }
+};
+
+/* ============================================================
+   ART  -  everything is drawn with shapes. No image files.
+   ============================================================ */
+function rect(x,y,w,h,c){ ctx.fillStyle=c; ctx.fillRect(x,y,w,h); }
+function circle(x,y,r,c){ ctx.fillStyle=c; ctx.beginPath(); ctx.arc(x,y,r,0,7); ctx.fill(); }
+function poly(pts,c){ ctx.fillStyle=c; ctx.beginPath(); pts.forEach((p,i)=> i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1])); ctx.closePath(); ctx.fill(); }
+
+const HEROES = {
+  max: { name:'Max Holloway', skin:'#e0a878', hair:'#3a2415', shirt:'#b08a4e', pants:'#6d5637', hat:'#7a5a31' },
+  rae: { name:'Rae Cortez',   skin:'#c98a5e', hair:'#241610', shirt:'#7b8f5a', pants:'#5b4a33', hat:'#6b5330' }
+};
+
+// draw the adventurer. f = walk frame, air = true when jumping
+function drawHero(x, y, face, f, key, air, big){
+  const H = HEROES[key] || HEROES.max;
+  const s = big ? 3 : 1;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(face < 0 ? -s : s, s);
+
+  const swing = air ? 0 : Math.sin(f) * 3;
+  // legs
+  rect(-4, 14, 3, 12 + (air ? -2 : 0), H.pants);
+  rect( 1, 14, 3, 12 + (air ? -2 : 0), H.pants);
+  ctx.save(); ctx.translate(0, 14); ctx.rotate(swing * 0.06);
+  rect(-4, 0, 3, 12, H.pants); ctx.restore();
+  // boots
+  rect(-5, 25, 5, 3, '#3b2a1a'); rect(1, 25, 5, 3, '#3b2a1a');
+  // body
+  rect(-5, 4, 10, 11, H.shirt);
+  rect(-5, 13, 10, 2, '#4a3423');            // belt
+  // satchel
+  rect(3, 9, 5, 6, '#5c4126'); rect(3, 9, 5, 2, '#3f2c19');
+  // arms
+  rect(-7, 5, 3, 9, H.shirt); rect(4, 5, 3, 9, H.shirt);
+  // head
+  circle(0, 0, 4.6, H.skin);
+  if(key === 'rae'){
+    // ponytail out the back
+    rect(-8, -2, 4, 9, H.hair);
+    poly([[-5,-4],[5,-4],[6,-1],[-6,-1]], H.hair);
+    rect(-8, -5, 16, 2, H.hat);              // slim brim
+    poly([[-4,-9],[4,-9],[5,-5],[-5,-5]], H.hat);
+  } else {
+    rect(-8, -4, 16, 2, H.hat);              // fedora brim
+    poly([[-4.5,-9],[4.5,-9],[5.5,-4],[-5.5,-4]], H.hat);
+    rect(-5.5, -5, 11, 1.6, '#5c4126');      // hat band
+  }
+  circle(1.8, 0.2, 0.9, '#22150d');   // eye
+  ctx.restore();
+}
+
+/* ---------- props ---------- */
+const PROP = {
+  tree(x, y, s){
+    rect(x-3*s, y-34*s, 6*s, 34*s, '#3d2a19');
+    circle(x, y-38*s, 13*s, '#2f5a37');
+    circle(x-10*s, y-32*s, 10*s, '#28502f');
+    circle(x+10*s, y-33*s, 11*s, '#356239');
+  },
+  bush(x, y, s){
+    circle(x, y-5*s, 8*s, '#2b5232');
+    circle(x-7*s, y-3*s, 6*s, '#24462b');
+    circle(x+7*s, y-3*s, 6*s, '#305c37');
+  },
+  column(x, y, s){
+    rect(x-7*s, y-46*s, 14*s, 46*s, '#9c8b70');
+    rect(x-9*s, y-50*s, 18*s, 5*s, '#b0a087');
+    rect(x-9*s, y-4*s, 18*s, 4*s, '#8a7a61');
+    for(let i=1;i<6;i++) rect(x-7*s, y-46*s+i*8*s, 14*s, 1*s, 'rgba(0,0,0,.16)');
+  },
+  vine(x, y, s){
+    rect(x-1*s, y-60*s, 2*s, 60*s, '#2f6337');
+    for(let i=0;i<6;i++) circle(x + (i%2?4:-4)*s, y-52*s+i*9*s, 3*s, '#3c7a44');
+  },
+  jeep(x, y, s){
+    rect(x-24*s, y-16*s, 48*s, 11*s, '#6b7a4a');
+    rect(x-14*s, y-24*s, 22*s, 9*s, '#5d6b41');
+    rect(x-12*s, y-22*s, 8*s, 6*s, '#8fb0c0');
+    circle(x-15*s, y-4*s, 6*s, '#2a2a2a'); circle(x-15*s, y-4*s, 2.4*s, '#7a7a7a');
+    circle(x+15*s, y-4*s, 6*s, '#2a2a2a'); circle(x+15*s, y-4*s, 2.4*s, '#7a7a7a');
+  },
+  stump(x, y, s){
+    rect(x-8*s, y-11*s, 16*s, 11*s, '#4a3421');
+    circle(x, y-11*s, 8*s, '#6b4f30');
+    circle(x, y-11*s, 4*s, '#5c4227');
+  },
+  machete(x, y, s){
+    ctx.save(); ctx.translate(x, y); ctx.rotate(-0.5);
+    rect(-1.5*s, -16*s, 3*s, 16*s, '#c9d2d8');
+    rect(-2.5*s, 0, 5*s, 7*s, '#4a3421');
+    ctx.restore();
+  },
+  rope(x, y, s){
+    for(let i=0;i<4;i++){
+      ctx.strokeStyle = '#c8a463'; ctx.lineWidth = 2*s;
+      ctx.beginPath(); ctx.arc(x, y-3*s, (7-i*1.4)*s, 0, Math.PI*2); ctx.stroke();
+    }
+  },
+  tablet(x, y, s){
+    rect(x-11*s, y-16*s, 22*s, 16*s, '#8d7d64');
+    poly([[x+11*s,y-16*s],[x+11*s,y-6*s],[x+3*s,y-16*s]], '#6f6250');
+    GLYPH.sun(x-6*s, y-11*s, 3*s); GLYPH.eye(x, y-11*s, 3*s);
+    ctx.globalAlpha=.25; GLYPH.snake(x+6*s, y-11*s, 3*s); ctx.globalAlpha=1;
+  },
+  door(x, y, s, open){
+    rect(x-18*s, y-46*s, 36*s, 46*s, open ? '#120c07' : '#7d6e58');
+    if(!open){
+      rect(x-16*s, y-43*s, 32*s, 40*s, '#8d7d64');
+      rect(x-1*s, y-43*s, 2*s, 40*s, '#6f6250');
+    }
+    rect(x-21*s, y-50*s, 42*s, 5*s, '#a2937a');
+  },
+  dial(x, y, s, sym){
+    circle(x, y, 8*s, '#6f6250'); circle(x, y, 6.4*s, '#a2937a');
+    GLYPH[sym] && GLYPH[sym](x, y, 3.4*s);
+  },
+  brazier(x, y, s, lit){
+    rect(x-2*s, y-14*s, 4*s, 14*s, '#5a4a34');
+    rect(x-7*s, y-20*s, 14*s, 6*s, '#7d6b4c');
+    if(lit){
+      const t = Date.now()/90;
+      circle(x, y-24*s + Math.sin(t)*1.2, 5*s, '#e8842a');
+      circle(x, y-26*s + Math.sin(t*1.3)*1.4, 3*s, '#ffd66b');
+    }
+  },
+  torch(x, y, s, lit){
+    ctx.save(); ctx.translate(x, y); ctx.rotate(0.35);
+    rect(-1.5*s, -14*s, 3*s, 14*s, '#5a4a34');
+    if(lit){
+      const t = Date.now()/90;
+      circle(0, -17*s + Math.sin(t)*1.2, 4*s, '#e8842a');
+      circle(0, -19*s, 2.2*s, '#ffd66b');
+    } else rect(-2.5*s, -18*s, 5*s, 5*s, '#3a2c1c');
+    ctx.restore();
+  },
+  plate(x, y, s, down){
+    rect(x-14*s, y-(down?2:4)*s, 28*s, (down?2:4)*s, '#7d6e58');
+    rect(x-16*s, y-1*s, 32*s, 2*s, '#5c5040');
+  },
+  idol(x, y, s){
+    poly([[x-6*s,y],[x+6*s,y],[x+4*s,y-8*s],[x-4*s,y-8*s]], '#d9a93c');
+    circle(x, y-12*s, 5*s, '#e8b44a');
+    circle(x-2*s, y-13*s, 1*s, '#6b4f10'); circle(x+2*s, y-13*s, 1*s, '#6b4f10');
+    poly([[x-7*s,y-16*s],[x+7*s,y-16*s],[x,y-22*s]], '#c99a30');
+  },
+  sandbag(x, y, s){
+    poly([[x-7*s,y],[x+7*s,y],[x+5*s,y-11*s],[x-5*s,y-11*s]], '#c2ab7e');
+    rect(x-4*s, y-13*s, 8*s, 3*s, '#8d7a54');
+  },
+  boulder(x, y, s){
+    circle(x, y, 14*s, '#7d7166');
+    circle(x-4*s, y-4*s, 4*s, '#8f8377');
+    circle(x+5*s, y+3*s, 3*s, '#6b6058');
+  },
+  wheel(x, y, s, turned){
+    ctx.save(); ctx.translate(x, y); ctx.rotate(turned ? 0.8 : 0);
+    ctx.strokeStyle = '#8a6a3c'; ctx.lineWidth = 2.4*s;
+    ctx.beginPath(); ctx.arc(0, 0, 8*s, 0, 7); ctx.stroke();
+    for(let i=0;i<4;i++){
+      const a = i*Math.PI/2;
+      ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(Math.cos(a)*8*s, Math.sin(a)*8*s); ctx.stroke();
+    }
+    ctx.restore();
+  },
+  monkey(x, y, s){
+    circle(x, y-8*s, 6*s, '#5fbf94');
+    circle(x-5*s, y-12*s, 2.6*s, '#5fbf94'); circle(x+5*s, y-12*s, 2.6*s, '#5fbf94');
+    poly([[x-5*s,y],[x+5*s,y],[x+4*s,y-8*s],[x-4*s,y-8*s]], '#4fae85');
+    circle(x-2*s, y-9*s, 1*s, '#1d3c30'); circle(x+2*s, y-9*s, 1*s, '#1d3c30');
+  },
+  macaw(x, y, s){
+    rect(x-26*s, y+1, 52*s, 3*s, '#3d2a19');
+    poly([[x-6*s,y],[x+2*s,y-3*s],[x-2*s,y-12*s]], '#d94f3f');
+    circle(x-2*s, y-13*s, 3.4*s, '#e8624f');
+    poly([[x-5*s,y-13*s],[x-1*s,y-15*s],[x-1*s,y-11*s]], '#e8c04a');
+    poly([[x+1*s,y-4*s],[x+9*s,y+3*s],[x+2*s,y-1*s]], '#3a7ad9');
+  },
+  rival(x, y, s){
+    rect(x-4, y+14, 3, 12, '#4a3a28'); rect(x+1, y+14, 3, 12, '#4a3a28');
+    rect(x-5, y+4, 10, 11, '#8f6a4a');
+    rect(x-7, y+5, 3, 9, '#8f6a4a'); rect(x+4, y+5, 3, 9, '#8f6a4a');
+    circle(x, y, 4.6, '#d7a074');
+    rect(x-9, y-4, 18, 2, '#3c2c1d');
+    poly([[x-5,y-11],[x+5,y-11],[x+6,y-4],[x-6,y-4]], '#3c2c1d');
+    rect(x-3, y+1, 6, 1.4, '#22150d');   // the moustache
+  },
+  spikes(x, y, w){
+    for(let i = 0; i < w; i += 8) poly([[x+i, y],[x+i+4, y-9],[x+i+8, y]], '#b6ada0');
+  },
+  water(x, y, w, h){
+    ctx.fillStyle = 'rgba(60,140,160,.55)';
+    ctx.fillRect(x, y, w, h);
+    ctx.fillStyle = 'rgba(150,220,230,.35)';
+    for(let i = 0; i < w; i += 16)
+      ctx.fillRect(x + i, y + Math.sin(Date.now()/300 + i) * 1.2, 10, 1.6);
+  }
+};
+
+const GLYPH = {
+  sun(x, y, r){ circle(x, y, r*0.55, '#e8b44a');
+    ctx.strokeStyle='#e8b44a'; ctx.lineWidth=Math.max(1,r*0.22);
+    for(let i=0;i<8;i++){ const a=i*Math.PI/4;
+      ctx.beginPath(); ctx.moveTo(x+Math.cos(a)*r*0.8,y+Math.sin(a)*r*0.8);
+      ctx.lineTo(x+Math.cos(a)*r*1.25,y+Math.sin(a)*r*1.25); ctx.stroke(); } },
+  snake(x, y, r){ ctx.strokeStyle='#5fbf94'; ctx.lineWidth=Math.max(1,r*0.34); ctx.beginPath();
+    for(let i=0;i<=12;i++){ const t=i/12; const px=x-r+2*r*t, py=y+Math.sin(t*Math.PI*2)*r*0.6;
+      i?ctx.lineTo(px,py):ctx.moveTo(px,py); } ctx.stroke(); },
+  eye(x, y, r){ ctx.fillStyle='#e6e0cf'; ctx.beginPath();
+    ctx.ellipse(x,y,r*1.15,r*0.66,0,0,7); ctx.fill(); circle(x,y,r*0.4,'#2b4a6b'); },
+  moon(x, y, r){ circle(x,y,r*0.95,'#dfe6ef'); circle(x+r*0.45,y-r*0.2,r*0.85,'#8d7d64'); }
+};
+const SYMS = ['sun','snake','eye','moon'];
+
+/* ============================================================
+   ITEMS
+   ============================================================ */
+const ITEMS = {
+  machete: { name:'Machete', art:'machete',
+    look:'Heavy, rusty, and enormously satisfying to swing at foliage.' },
+  rope:    { name:'Coil of rope', art:'rope',
+    look:'Forty feet of rope. In this line of work that is basically a personality.' },
+  torch:   { name:'Torch', art:'torch',
+    look:'A stick with cloth on the end. Peak temple technology.' },
+  sandbag: { name:'Bag of sand', art:'sandbag',
+    look:'A bag of sand, left by someone who also saw this coming.' },
+  idol:    { name:'Golden idol', art:'idol',
+    look:'Solid gold, apparently. It is suspiciously light for solid gold.' },
+  monkey:  { name:'Jade monkey', art:'monkey',
+    look:'The actual relic. It is smirking. You are choosing to find that encouraging.' }
+};
+
+/* ============================================================
+   THE WORLD  -  every room is just data. Copy one, change the
+   numbers, and you have made a new room.
+   ============================================================ */
+const GROUND = 214;
+const flag = k => !!S.flags[k];
+const set  = (k, v) => { S.flags[k] = v === undefined ? true : v; };
+
+const WORLD = {
+
+  clearing: {
+    name:'Jungle Clearing', sky:['#f6d191','#e39b62'], far:'jungle', dirt:'#6a4c2e',
+    enter:['The jungle is hot, loud, and completely indifferent to your career.',
+           'Somewhere past those trees is a temple. Somewhere behind you is a man who wants it more than you do.'],
+    platforms:[{x:0,y:GROUND,w:480,h:56}],
+    decor:[['tree',40,GROUND,1],['tree',430,GROUND,1.1],['bush',110,GROUND,1],['bush',330,GROUND,.9]],
+    exits:{ right:'vines' },
+    things:[
+      { id:'jeep', x:390, y:GROUND, w:48, h:28, art:'jeep',
+        label:'A jeep',
+        look:'A jeep with a bumper sticker reading ARCHAEOLOGY IS JUST DIGGING WITH PAPERWORK. It is not your jeep.',
+        act(){ say('You try the door. Locked. Of course it is locked, he is not an idiot. He is just awful.'); } },
+      { id:'stump', x:150, y:GROUND, w:22, h:14, art:'stump',
+        label:'Tree stump',
+        look(){ return flag('gotMachete')
+          ? 'A stump with a slot in it, shaped like regret.'
+          : 'Somebody has left a machete buried in this stump. Somebody is having a worse day than you.'; },
+        act(){
+          if(flag('gotMachete')) return say('The stump has nothing else to offer.');
+          take('machete'); set('gotMachete');
+          say(['You wrench the machete free.','It comes out with a noise you will be doing at parties for years.']);
+        } },
+      { id:'macaw', x:255, y:GROUND-30, w:18, h:22, art:'macaw',
+        label:'A macaw',
+        look:'A macaw the colour of a traffic accident. It is watching you with real contempt.',
+        act(){
+          if(flag('sawTablet') && !flag('birdTold')){
+            set('birdTold');
+            SFX.play('gold');
+            say(['The macaw fluffs up and shrieks:','"SSSSNAKE! SNAKE! SNAKE!"',
+                 'Then it goes back to ignoring you.',
+                 'Third symbol: the snake. You write it on your hand.']);
+          } else if(flag('birdTold')){
+            say('"SNAKE," the macaw offers again, in case you are slow.');
+          } else {
+            say(['You say hello to the macaw.','The macaw says something that is definitely not hello.']);
+          }
+        } }
+    ]
+  },
+
+  vines: {
+    name:'Overgrown Path', sky:['#efc27f','#d68f5c'], far:'jungle', dirt:'#63472b',
+    enter:['The path narrows. The jungle has been busy.'],
+    platforms:[{x:0,y:GROUND,w:200,h:56},{x:250,y:GROUND,w:230,h:56}],
+    decor:[['tree',30,GROUND,1.15],['bush',170,GROUND,.8],['tree',300,GROUND,.9]],
+    exits:{ left:'clearing', right(){ return flag('cutVines') ? 'bridge' : null; } },
+    blockedRight:'A curtain of vines. You are not walking through that with a personality alone.',
+    hazards:[{x:200,y:GROUND+6,w:50,h:50,
+      msg:'You step confidently into a gap in the ground and discover it is full of snake. The snake had plans for today.'}],
+    things:[
+      { id:'vinewall', x:452, y:GROUND, w:24, h:60, art:'vine', label:'Wall of vines',
+        look(){ return flag('cutVines') ? 'A hacked-open gap. Your handiwork.' : 'Vines, thick as your arm, woven across the whole path.'; },
+        use:{ machete(){
+          if(flag('cutVines')) return say('Already dealt with. Stop showing off.');
+          set('cutVines'); SFX.play('kick');
+          say(['You swing the machete.','Three minutes later the vines are confetti and you are extremely sweaty.','The path is open.']);
+        } },
+        act(){ return flag('cutVines') ? say('The way is clear.') : say('You pull at the vines. The vines pull back. The vines win.'); } }
+    ]
+  },
+
+  bridge: {
+    name:'The Rope Bridge', sky:['#e9bb7c','#c97f56'], far:'canyon', dirt:'#5a4029',
+    enter:['A gorge, and across it a bridge that has clearly seen things.',
+           'Some of the planks are missing. Most of the planks are missing.'],
+    platforms:[{x:0,y:GROUND,w:110,h:56},{x:150,y:GROUND,w:60,h:10},
+               {x:250,y:GROUND,w:60,h:10},{x:350,y:GROUND,w:130,h:56}],
+    decor:[['bush',40,GROUND,.7],['bush',430,GROUND,.8]],
+    exits:{ left:'vines', right:'steps' },
+    things:[
+      { id:'tablet', x:60, y:GROUND, w:24, h:18, art:'tablet', label:'Fallen tablet',
+        look(){ set('sawTablet'); return ['A stone tablet, face up, half buried.',
+          'Three symbols are carved in a row: SUN, then EYE, then a third one worn away entirely.',
+          'Underneath, in smaller letters: "the bird remembers".']; },
+        act(){ say('It weighs about as much as a fridge. It stays where it is.'); } },
+      { id:'ropecoil', x:410, y:GROUND, w:20, h:14, art:'rope', label:'Coil of rope',
+        hidden(){ return flag('gotRope'); },
+        look:'Somebody left good rope out here. Their loss, your afternoon.',
+        act(){ take('rope'); set('gotRope'); say('You take the rope. You feel about forty percent more prepared.'); } }
+    ]
+  },
+
+  steps: {
+    name:'Temple Steps', sky:['#dda869','#b06f4d'], far:'temple', dirt:'#6b5c45',
+    enter:['The temple. Older than anything you have ever been paid to find.',
+           'A stone door, and three dials beside it.'],
+    platforms:[{x:0,y:GROUND,w:480,h:56}],
+    decor:[['column',60,GROUND,1],['column',420,GROUND,1],['bush',130,GROUND,.7]],
+    exits:{ left:'bridge' },
+    things:[
+      { id:'plaque', x:110, y:GROUND-30, w:22, h:16, art:null, label:'Worn plaque',
+        look:['The plaque reads: "ONLY THE WORTHY MAY ENTER."',
+              'Underneath, someone has scratched: "and anyone who reads the tablet".'] },
+      { id:'d0', x:200, y:GROUND-42, w:18, h:18, art:'dialSlot', slot:0, label:'Left dial',
+        look:'A stone dial. It turns.', act(){ turnDial(0); } },
+      { id:'d1', x:240, y:GROUND-42, w:18, h:18, art:'dialSlot', slot:1, label:'Middle dial',
+        look:'A stone dial. Also turns. Consistent, this temple.', act(){ turnDial(1); } },
+      { id:'d2', x:280, y:GROUND-42, w:18, h:18, art:'dialSlot', slot:2, label:'Right dial',
+        look:'A stone dial, slightly stiff.', act(){ turnDial(2); } },
+      { id:'stonedoor', x:330, y:GROUND, w:40, h:50, art:'doorSlot', label:'Stone door',
+        look(){ return flag('doorOpen') ? 'Open. Dark inside. Encouraging.' : 'Sealed. Three symbols must be set beside it.'; },
+        act(){
+          if(flag('doorOpen')){ go('hall', 40); return; }
+          say('It does not budge. It has not budged in nine hundred years. It is not going to start for you.');
+        } }
+    ]
+  },
+
+  hall: {
+    name:'The Long Hall', sky:['#221609','#150d05'], far:'inside', dirt:'#4a3d2c', dark:true,
+    enter:['Inside. Cold, and much too quiet.',
+           'There is a lit brazier by the door and a great deal of darkness past it.'],
+    platforms(){ return flag('boulderPassed')
+      ? [{x:0,y:GROUND,w:200,h:56},{x:260,y:GROUND,w:220,h:56}]
+      : [{x:0,y:GROUND,w:230,h:56},{x:290,y:GROUND,w:190,h:56}]; },
+    decor:[['column',70,GROUND,.9],['column',420,GROUND,.9]],
+    exits:{ left:'steps', right:'idolRoom' },
+    things:[
+      { id:'brazier', x:100, y:GROUND, w:20, h:26, art:'brazierLit', label:'Brazier',
+        look:'A stone bowl of fire that has been burning since before your country existed. Nobody knows why. Nobody is asking.',
+        use:{ torch(){
+          if(flag('torchLit')) return say('Your torch is already lit. Two fires is not better.');
+          set('torchLit'); SFX.play('gold'); drawInv();
+          say(['You dip the torch into the brazier.','It catches, and the hall gets a great deal less mysterious.']);
+        } },
+        act(){ say('You warm your hands. Nine hundred years of fire, and it is still just fire.'); } },
+      { id:'walltorch', x:150, y:GROUND-40, w:14, h:20, art:'torchSlot', label:'Torch',
+        hidden(){ return flag('gotTorch'); },
+        look:'An unlit torch in a bracket.',
+        act(){ take('torch'); set('gotTorch'); say('You take the torch. It is not lit. That feels like a solvable problem.'); } },
+      { id:'hole', x:230, y:GROUND, w:50, h:20, art:null, label:'Smashed hole',
+        hidden(){ return !flag('boulderPassed'); },
+        look:'A boulder-shaped hole in the floor. Below it, the sound of water.',
+        act(){ say('You lower yourself through the hole.', () => go('cistern', 60)); } }
+    ]
+  },
+
+  idolRoom: {
+    name:'Chamber of the Idol', sky:['#2a1a0b','#150d05'], far:'inside', dirt:'#4a3d2c',
+    enter:['A small round room, and in the middle of it, on a stone plate, a golden idol.',
+           'You have seen this exact setup in a film. You know how this goes. You are going to do it anyway.'],
+    platforms:[{x:0,y:GROUND,w:480,h:56}],
+    decor:[['column',50,GROUND,.85],['column',430,GROUND,.85]],
+    exits:{ left:'hall' },
+    things:[
+      { id:'ledge', x:150, y:GROUND-46, w:26, h:18, art:'sandSlot', label:'Bag of sand',
+        hidden(){ return flag('gotSand'); },
+        look:'A bag of sand on a ledge. Left by somebody who got exactly this far and then thought better of it.',
+        act(){ take('sandbag'); set('gotSand'); say('You take the bag of sand. It is the correct weight for something. You will find out what.'); } },
+      { id:'plateIdol', x:300, y:GROUND, w:40, h:34, art:'plateIdolSlot', label:'The idol',
+        hidden(){ return flag('gotIdol'); },
+        look:'A golden idol on a pressure plate. The plate is very slightly depressed. The ceiling is very slightly interested.',
+        use:{ sandbag(){
+          if(flag('swapped')) return say('You have already done the swap. Do not push your luck twice.');
+          set('swapped'); SFX.play('lock');
+          say(['You hold the bag of sand over the plate.','You slide the idol off and the bag on in one motion.',
+               'Nothing happens.','Nothing continues to happen.','You allow yourself to feel clever.'],
+              () => { take('idol'); set('gotIdol'); startBoulder(); });
+        } },
+        act(){
+          if(!S.inv.includes('sandbag'))
+            return say(['You lift the idol straight off the plate.','The plate rises. Somewhere above you, a mechanism that has waited nine centuries says: finally.'],
+                       () => die('A block of ceiling arrives, on schedule, at speed.'));
+          say('You could just grab it. Or you could use that bag of sand you are holding like a professional.');
+        } }
+    ]
+  },
+
+  cistern: {
+    name:'The Cistern', sky:['#12222a','#0a1418'], far:'inside', dirt:'#3d4a4a',
+    enter:['A flooded chamber. Two iron wheels, one on each wall, and a door up on the far ledge.',
+           'The water is waiting to see what you do.'],
+    platforms(){ return flag('waterUp')
+      ? [{x:0,y:GROUND,w:170,h:56},{x:190,y:170,w:90,h:8},{x:300,y:130,w:180,h:8},{x:330,y:GROUND,w:150,h:56}]
+      : [{x:0,y:GROUND,w:170,h:56},{x:330,y:GROUND,w:150,h:56}]; },
+    exits:{ left(){ return null; } },
+    hazards(){ return flag('waterUp') ? [] : [{x:170,y:GROUND-4,w:160,h:70,
+      msg:'You step into the water. The water, it turns out, is deeper than the room is tall.'}]; },
+    things:[
+      { id:'vaultdoor', x:430, y:130, w:34, h:44, art:'doorOpenSlot', label:'Vault door',
+        hidden(){ return !flag('waterUp'); },
+        look:'A low door at the top of the water stairs. Beyond it, something is very quiet.',
+        act(){ say('You duck through the door.', () => go('vault', 60)); } },
+      { id:'sign', x:60, y:GROUND-34, w:22, h:16, art:null, label:'Iron sign',
+        look:['A corroded sign above the near wheel.','It reads: "FAR WHEEL FIRST." ',
+              'Below it, scratched by a later and unhappier hand: "HE MEANS IT."'] },
+      { id:'wheelFar', x:420, y:GROUND-40, w:20, h:20, art:'wheelSlot', which:'far', label:'Far wheel',
+        look:'An iron wheel, bright with use. Somebody turned this a lot.',
+        act(){
+          if(flag('waterUp')) return say('Both wheels are done. The water is where you need it.');
+          set('farTurned'); SFX.play('rotate');
+          say(['You heave the far wheel around.','Deep in the wall something enormous unlocks.']);
+        } },
+      { id:'wheelNear', x:120, y:GROUND-40, w:20, h:20, art:'wheelSlot', which:'near', label:'Near wheel',
+        look:'An iron wheel. Slightly newer, which in here means eight hundred years old.',
+        act(){
+          if(flag('waterUp')) return say('Done. Leave it alone.');
+          if(!flag('farTurned'))
+            return say(['You turn the near wheel first.','There is a click, and then a sound like the whole hill clearing its throat.'],
+                       () => die('The chamber fills in four seconds. The sign did warn you. The sign was very clear.'));
+          set('waterUp'); SFX.play('gold');
+          say(['You turn the near wheel.','The water rises smoothly, lifting stone steps out of itself as it comes.',
+               'A staircase. Made of water pressure and spite.']);
+        } }
+    ]
+  },
+
+  vault: {
+    name:'The Vault', sky:['#1e1408','#100a04'], far:'inside', dirt:'#5a4a30',
+    enter:['The vault. On a pedestal in the centre: a small jade monkey, smirking.',
+           'And leaning on the pedestal, holding a revolver he is not pointing at you yet, is Bartholomew Crisp.'],
+    platforms:[{x:0,y:GROUND,w:480,h:56}],
+    decor:[['column',60,GROUND,1],['column',420,GROUND,1]],
+    exits:{ left:'cistern' },
+    things:[
+      { id:'crisp', x:330, y:GROUND-26, w:22, h:30, art:'rivalSlot', label:'Bartholomew Crisp',
+        hidden(){ return flag('crispGone'); },
+        look:'Your rival. Better funded, worse hat, and he has never once said thank you.',
+        use:{ idol(){
+          set('crispGone'); SFX.play('goal');
+          say(['"The treasure, please," says Crisp, "and I will only shoot you a little."',
+               'You hand him the golden idol.',
+               'He weighs it. He beams. He calls you a fool, twice, using the same word both times.',
+               'He leaves at a jog, cradling nine pounds of painted lead.',
+               'You had noticed it was suspiciously light. He did not.']);
+        } },
+        act(){
+          if(S.inv.includes('idol'))
+            return say('"The treasure," says Crisp, holding out a gloved hand. You are, in fact, holding a treasure.');
+          say(['"Not one step," says Crisp. "I want what is on that pedestal."',
+               'He looks like a man who would very much accept a substitute.']);
+        } },
+      { id:'monkey', x:230, y:GROUND-30, w:24, h:30, art:'monkeySlot', label:'Jade monkey',
+        hidden(){ return flag('gotMonkey'); },
+        look:'A jade monkey the size of your fist. This one is real, and it is heavy, and it is smirking.',
+        act(){
+          if(!flag('crispGone'))
+            return say('"I would not," says Crisp, and for once he is right. He is closer to it than you are.');
+          take('monkey'); set('gotMonkey'); SFX.play('win');
+          endChapter();
+        } }
+    ]
+  }
+};
+
+/* ============================================================
+   STATE
+   ============================================================ */
+const CODE = ['sun','eye','snake'];          // the stone door combination
+const SAVE_KEY = 'relic_save_v1';
+
+let S = null;
+function freshState(hero){
+  return { hero: hero || 'max', room:'clearing', px:70, py:GROUND, vy:0,
+           face:1, frame:0, flags:{}, inv:[], sel:null, dials:[0,0,0] };
+}
+function saveGame(){ try{ store.set(SAVE_KEY, JSON.stringify(S)); }catch(e){} }
+function loadGame(){
+  try{ const raw = store.get(SAVE_KEY, null); if(!raw) return null;
+       const o = JSON.parse(raw); return (o && o.room && WORLD[o.room]) ? o : null; }catch(e){ return null; }
+}
+
+const R      = () => WORLD[S.room];
+const val    = v => (typeof v === 'function' ? v() : v);
+const plats  = () => val(R().platforms) || [];
+const hazs   = () => val(R().hazards) || [];
+const things = () => (R().things || []).filter(t => !(t.hidden && t.hidden()));
+
+let boulder = null, running = false, paused = true, tick = 0;
+
+/* ============================================================
+   TALKING
+   ============================================================ */
+const sayBox = document.getElementById('say');
+let queue = [], afterSay = null;
+
+function say(lines, done){
+  if(typeof lines === 'function') lines = lines();
+  queue = queue.concat(Array.isArray(lines) ? lines : [lines]);
+  afterSay = done || afterSay;
+  showNext();
+}
+function showNext(){
+  if(!queue.length){
+    sayBox.style.display = 'none';
+    const f = afterSay; afterSay = null;
+    if(f) f();
+    return;
+  }
+  const line = queue.shift();
+  sayBox.querySelector('.who').textContent = queue.length ? 'narrator' : 'narrator';
+  sayBox.querySelector('.txt').textContent = line;
+  sayBox.querySelector('.more').textContent = queue.length ? 'tap or press space' : 'tap or press space to close';
+  sayBox.style.display = 'block';
+  placeSay();
+  SFX.play('click');
+}
+function placeSay(){
+  const r = cv.getBoundingClientRect();
+  sayBox.style.top = (r.bottom - sayBox.offsetHeight - 10) + 'px';
+}
+const talking = () => sayBox.style.display === 'block';
+sayBox.addEventListener('click', showNext);
+
+/* ============================================================
+   INVENTORY
+   ============================================================ */
+function take(id){ if(!S.inv.includes(id)) S.inv.push(id); drawInv(); saveGame(); }
+function drop(id){ S.inv = S.inv.filter(i => i !== id); if(S.sel === id) S.sel = null; drawInv(); saveGame(); }
+
+function drawInv(){
+  const el = document.getElementById('inv');
+  el.innerHTML = '';
+  if(!S.inv.length){
+    const d = document.createElement('div');
+    d.className = 'empty'; d.textContent = 'Pockets: empty. Optimism: intact.';
+    el.appendChild(d); return;
+  }
+  S.inv.forEach(id => {
+    const slot = document.createElement('div');
+    slot.className = 'slot' + (S.sel === id ? ' sel' : '');
+    slot.title = ITEMS[id].name;
+    const c = document.createElement('canvas');
+    c.width = c.height = 34;
+    slot.appendChild(c);
+    drawItemInto(c.getContext('2d'), id);
+    slot.onclick = () => {
+      S.sel = (S.sel === id) ? null : id;
+      SFX.play('click');
+      drawInv();
+      document.getElementById('bAct').textContent = S.sel ? 'USE ' + ITEMS[id].name.split(' ')[0].toUpperCase() : 'USE';
+    };
+    el.appendChild(slot);
+  });
+}
+// items are drawn with the same PROP functions, just into a small canvas
+function drawItemInto(g, id){
+  const art = ITEMS[id].art;
+  try {
+    ctxRef.set(g);
+    g.clearRect(0,0,34,34);
+    g.save(); g.translate(17, 26);
+    if(art === 'machete') PROP.machete(0, -2, 1.1);
+    else if(art === 'rope') PROP.rope(0, -6, 1.1);
+    else if(art === 'torch') PROP.torch(0, 2, 1.2, flag('torchLit'));
+    else if(art === 'sandbag') PROP.sandbag(0, 2, 1.2);
+    else if(art === 'idol') PROP.idol(0, 4, 0.8);
+    else if(art === 'monkey') PROP.monkey(0, 4, 1.0);
+    g.restore();
+  } finally { ctxRef.set(MAIN_CTX); }
+}
+
+/* ============================================================
+   MOVING AROUND
+   ============================================================ */
+const PW = 12, PH = 27;                 // player width and height
+
+function groundUnder(x, y){
+  let best = null;
+  for(const p of plats()){
+    if(x > p.x - 2 && x < p.x + p.w + 2 && p.y >= y - 4){
+      if(!best || p.y < best.y) best = p;
+    }
+  }
+  return best;
+}
+
+function go(roomId, x){
+  if(!roomId || !WORLD[roomId]) return;
+  if(S.room === 'idolRoom' && boulder){ set('boulderPassed'); boulder = null;
+    say(['Behind you the boulder hits the far wall and keeps going, straight down through the floor.',
+         'It has made you a doorway. You are choosing to see that as a favour.']); }
+  S.room = roomId;
+  S.px = x; S.vy = 0;
+  const g = groundUnder(x, 0);
+  S.py = g ? g.y : GROUND;
+  boulder = null;
+  saveGame();
+  const seen = 'seen_' + roomId;
+  if(!flag(seen)){ set(seen); if(R().enter) say(R().enter); }
+  document.getElementById('chapLabel').textContent = R().name;
+}
+
+function startBoulder(){
+  boulder = { x: 560, y: GROUND - 14, spin: 0 };
+  SFX.play('bomb');
+  say(['Behind you, something the size of a car begins to move.','RUN. Left. Now.']);
+}
+
+function die(msg){
+  if(!running) return;
+  running = false;
+  SFX.play('die');
+  queue = []; afterSay = null; sayBox.style.display = 'none';
+  document.getElementById('deathText').textContent = msg;
+  document.getElementById('deathScreen').classList.add('on');
+}
+
+function respawn(){
+  document.getElementById('deathScreen').classList.remove('on');
+  boulder = null;
+  const g = plats()[0];
+  S.px = g ? g.x + 30 : 40;
+  S.py = g ? g.y : GROUND;
+  S.vy = 0;
+  running = true; paused = false;
+}
+
+/* ============================================================
+   USING THINGS
+   ============================================================ */
+function nearest(){
+  let best = null, bd = 1e9;
+  const cx = S.px, cy = S.py - PH/2;
+  for(const t of things()){
+    const tx = t.x, ty = t.y - t.h/2;
+    const d = Math.hypot(cx - tx, cy - ty);
+    if(d < REACH + t.w/2 && d < bd){ bd = d; best = t; }
+  }
+  return best;
+}
+
+function doLook(){
+  const t = nearest();
+  if(!t) return say(R().look || 'You look around. It is all very old and very committed to staying that way.');
+  say(val(t.look) || 'It is exactly what it looks like.');
+}
+
+function doAct(){
+  const t = nearest();
+  if(!t){
+    if(S.sel) return say('You wave the ' + ITEMS[S.sel].name.toLowerCase() + ' at the air. The air is unimpressed.');
+    return say('There is nothing here worth touching.');
+  }
+  if(S.sel && t.use && t.use[S.sel]){ const item = S.sel; S.sel = null; drawInv();
+    document.getElementById('bAct').textContent = 'USE';
+    return t.use[item].call(t); }
+  if(S.sel) return say('The ' + ITEMS[S.sel].name.toLowerCase() + ' does nothing to ' + (t.label || 'that').toLowerCase() + '.');
+  if(t.act) return t.act();
+  say(val(t.look) || 'Nothing happens.');
+}
+
+function turnDial(i){
+  S.dials[i] = (S.dials[i] + 1) % SYMS.length;
+  SFX.play('rotate');
+  saveGame();
+  if(SYMS[S.dials[0]] === CODE[0] && SYMS[S.dials[1]] === CODE[1] && SYMS[S.dials[2]] === CODE[2]){
+    if(!flag('doorOpen')){
+      set('doorOpen'); SFX.play('win');
+      say(['The three dials settle into place.','Something enormous lets go, and the stone door grinds open.']);
+    }
+  }
+}
+
+function endChapter(){
+  running = false;
+  document.getElementById('cardTitle').textContent = 'Chapter One complete';
+  document.getElementById('cardText').textContent =
+    'You walk out of the temple with a jade monkey in your satchel and no plan for customs. ' +
+    'Somewhere ahead of you, Bartholomew Crisp is showing a very heavy fake to a very serious buyer. ' +
+    'That is going to become your problem in about four days.';
+  document.getElementById('cardBtn').textContent = 'To be continued';
+  document.getElementById('cardScreen').classList.add('on');
+  store.del(SAVE_KEY);
+}
+
+/* ============================================================
+   DRAWING THE ROOM
+   ============================================================ */
+function far(kind){
+  if(kind === 'jungle'){
+    circle(392, 54, 34, 'rgba(255,238,190,.55)');
+    circle(392, 54, 22, 'rgba(255,246,214,.85)');
+    // distant ridge with a temple roof poking out of it
+    poly([[0,150],[90,104],[170,132],[250,92],[330,124],[420,98],[VW,140],[VW,GROUND],[0,GROUND]], '#5f7a5a');
+    poly([[196,110],[300,110],[248,72]], '#6d7f68');
+    // two bands of canopy, dark in front
+    for(let i = 0; i < 11; i++){
+      const x = i * 48 + 10, y = GROUND - 76 + (i % 3) * 7;
+      circle(x, y, 26, '#3c6a41');
+    }
+    for(let i = 0; i < 9; i++){
+      const x = i * 58 + 24;
+      rect(x - 3, GROUND - 52, 6, 54, '#26402c');
+      circle(x, GROUND - 50, 30, '#2b5233');
+    }
+    rect(0, GROUND - 8, VW, 10, '#1f3a28');
+  } else if(kind === 'canyon'){
+    poly([[0,GROUND],[70,GROUND-70],[150,GROUND-30],[230,GROUND-90],[320,GROUND-40],[400,GROUND-80],[VW,GROUND-20],[VW,VH],[0,VH]], '#7a5a3d');
+    rect(0, GROUND, VW, VH - GROUND, '#3a2a1c');
+  } else if(kind === 'temple'){
+    poly([[0,150],[110,112],[210,138],[VW,120],[VW,GROUND],[0,GROUND]], '#8a6f52');
+    poly([[50,GROUND],[430,GROUND],[430,GROUND-118],[240,GROUND-172],[50,GROUND-118]], '#6d5f49');
+    poly([[62,GROUND],[418,GROUND],[418,GROUND-108],[240,GROUND-158],[62,GROUND-108]], '#7d6e56');
+    for(let i = 0; i < 7; i++) rect(64, GROUND - 104 + i * 15, 352, 3, 'rgba(0,0,0,.17)');
+    for(let i = 0; i < 3; i++) rect(40 - i * 8, GROUND + i * 8, 400 + i * 16, 8, i % 2 ? '#7d6e56' : '#8a7a60');
+  } else {
+    rect(0, 0, VW, VH, '#1b1208');
+    for(let i = 0; i < 12; i++) rect(i * 42, 0, 3, GROUND, 'rgba(0,0,0,.22)');
+    for(let i = 0; i < 6; i++) rect(0, i * 34 + 10, VW, 2, 'rgba(255,255,255,.03)');
+  }
+}
+
+// a few leaves hanging into the top of the frame, so outdoor rooms
+// feel like you are looking through the jungle rather than at a wall
+function canopy(){
+  for(let i = 0; i < 7; i++){
+    const x = i * 76 - 10, y = -14 + (i % 2) * 10;
+    circle(x, y, 30, '#1c3524');
+    circle(x + 26, y + 12, 20, '#20402a');
+  }
+  const g2 = ctx.createLinearGradient(0, VH - 60, 0, VH);
+  g2.addColorStop(0, 'rgba(0,0,0,0)'); g2.addColorStop(1, 'rgba(0,0,0,.28)');
+  ctx.fillStyle = g2; ctx.fillRect(0, VH - 60, VW, 60);
+}
+
+function drawThing(t){
+  const s = 1;
+  switch(t.art){
+    case 'dialSlot':      PROP.dial(t.x, t.y, 1.1, SYMS[S.dials[t.slot]]); break;
+    case 'doorSlot':      PROP.door(t.x, t.y, 1, flag('doorOpen')); break;
+    case 'doorOpenSlot':  PROP.door(t.x, t.y, .85, true); break;
+    case 'torchSlot':     PROP.torch(t.x, t.y, 1.1, false); break;
+    case 'brazierLit':    PROP.brazier(t.x, t.y, 1, true); break;
+    case 'sandSlot':      PROP.sandbag(t.x, t.y, 1.1); break;
+    case 'plateIdolSlot': PROP.plate(t.x, t.y, 1, flag('swapped'));
+                          if(flag('swapped')) PROP.sandbag(t.x, t.y - 4, 1);
+                          else PROP.idol(t.x, t.y - 4, 1); break;
+    case 'wheelSlot':     PROP.wheel(t.x, t.y - t.h/2, 1.1,
+                            t.which === 'far' ? flag('farTurned') : flag('waterUp')); break;
+    case 'rivalSlot':     PROP.rival(t.x, t.y - t.h + 8, 1); break;
+    case 'monkeySlot':    rect(t.x - 12, t.y - 12, 24, 12, '#8a7a60');
+                          PROP.monkey(t.x, t.y - 12, 1); break;
+    case null: case undefined:
+      rect(t.x - t.w/2, t.y - t.h, t.w, t.h, '#8d7d64');
+      rect(t.x - t.w/2 + 2, t.y - t.h + 2, t.w - 4, t.h - 4, '#6f6250');
+      break;
+    default: if(PROP[t.art]) PROP[t.art](t.x, t.y, s);
+  }
+}
+
+function render(){
+  const room = R();
+  ctx.setTransform(1,0,0,1,0,0);
+  const g = ctx.createLinearGradient(0, 0, 0, VH);
+  g.addColorStop(0, room.sky[0]); g.addColorStop(1, room.sky[1]);
+  ctx.fillStyle = g; ctx.fillRect(0, 0, VW, VH);
+
+  far(room.far);
+  (room.decor || []).forEach(d => PROP[d[0]] && PROP[d[0]](d[1], d[2], d[3]));
+
+  if(S.room === 'cistern') PROP.water(170, flag('waterUp') ? 158 : GROUND + 2, 160, VH - 100);
+
+  for(const p of plats()){
+    rect(p.x, p.y, p.w, p.h, room.dirt || '#6a4c2e');
+    rect(p.x, p.y, p.w, 3, 'rgba(255,255,255,.10)');
+    rect(p.x, p.y + p.h - 3, p.w, 3, 'rgba(0,0,0,.18)');
+  }
+  // grass only grows outdoors, obviously
+  if(room.far === 'jungle' || room.far === 'canyon') for(const p of plats()){
+    for(let x = p.x + 4; x < p.x + p.w; x += 13){
+      const h = 3 + ((x * 7) % 4);
+      rect(x, p.y - h, 2, h, '#3f6b46');
+    }
+  }
+  for(const h of hazs()) if(h.spikes) PROP.spikes(h.x, h.y, h.w);
+
+  things().forEach(drawThing);
+
+  if(boulder){
+    ctx.save(); ctx.translate(boulder.x, boulder.y); ctx.rotate(boulder.spin);
+    PROP.boulder(0, 0, 1); ctx.restore();
+  }
+
+  drawHero(S.px, S.py - PH, S.face, S.frame, S.hero, Math.abs(S.vy) > 0.6);
+
+  if(room.far === 'jungle' || room.far === 'canyon') canopy();
+
+  if(room.dark){
+    const r = flag('torchLit') ? 130 : 48;
+    ctx.save();
+    ctx.globalCompositeOperation = 'source-over';
+    const dg = ctx.createRadialGradient(S.px, S.py - 14, r * 0.35, S.px, S.py - 14, r);
+    dg.addColorStop(0, 'rgba(0,0,0,0)');
+    dg.addColorStop(1, 'rgba(0,0,0,0.94)');
+    ctx.fillStyle = dg; ctx.fillRect(0, 0, VW, VH);
+    ctx.fillStyle = 'rgba(0,0,0,0.94)';
+    ctx.fillRect(0, 0, Math.max(0, S.px - r), VH);
+    ctx.fillRect(Math.min(VW, S.px + r), 0, VW, VH);
+    ctx.restore();
+  }
+
+  const t = nearest();
+  if(t && !talking()){
+    ctx.fillStyle = 'rgba(22,15,10,.82)';
+    const label = (S.sel ? 'USE ' + ITEMS[S.sel].name + ' ON ' : '') + (t.label || 'this');
+    ctx.font = '10px Trebuchet MS'; ctx.textAlign = 'center';
+    const w = ctx.measureText(label).width + 14;
+    ctx.fillRect(t.x - w/2, t.y - t.h - 20, w, 15);
+    ctx.fillStyle = '#f6ead4';
+    ctx.fillText(label, t.x, t.y - t.h - 9);
+  }
+}
+
+/* ============================================================
+   THE LOOP
+   ============================================================ */
+const keys = {};
+document.addEventListener('keydown', e => {
+  if(e.code === 'Space' || e.code === 'Enter'){
+    if(talking()){ e.preventDefault(); showNext(); return; }
+  }
+  keys[e.code] = true;
+  if(['ArrowLeft','ArrowRight','ArrowUp','Space'].includes(e.code)) e.preventDefault();
+  if(!running || talking()) return;
+  if(e.code === 'KeyE') doAct();
+  if(e.code === 'KeyQ') doLook();
+});
+document.addEventListener('keyup', e => { keys[e.code] = false; });
+
+const touch = { left:false, right:false, jump:false };
+function bindHold(id, on, off){
+  const el = document.getElementById(id);
+  const a = e => { e.preventDefault(); SFX.unlock(); on(); };
+  const b = e => { off && off(); };
+  el.addEventListener('touchstart', a, {passive:false});
+  el.addEventListener('touchend', b); el.addEventListener('touchcancel', b);
+  el.addEventListener('mousedown', a); el.addEventListener('mouseup', b); el.addEventListener('mouseleave', b);
+}
+bindHold('bLeft',  () => touch.left = true,  () => touch.left = false);
+bindHold('bRight', () => touch.right = true, () => touch.right = false);
+bindHold('bJump',  () => touch.jump = true,  () => touch.jump = false);
+document.getElementById('bAct').onclick  = () => { if(talking()) return showNext(); if(running) doAct(); };
+document.getElementById('bLook').onclick = () => { if(talking()) return showNext(); if(running) doLook(); };
+
+function step(){
+  if(!running || paused) return;
+  tick++;
+
+  const left  = keys.ArrowLeft  || keys.KeyA || touch.left;
+  const right = keys.ArrowRight || keys.KeyD || touch.right;
+  const jump  = keys.ArrowUp    || keys.KeyW || keys.Space || touch.jump;
+
+  if(!talking()){
+    if(left){  S.px -= RUN; S.face = -1; S.frame += 0.25; }
+    if(right){ S.px += RUN; S.face =  1; S.frame += 0.25; }
+    const onGround = Math.abs(S.vy) < 0.01 && standing();
+    if(jump && onGround){ S.vy = -JUMP; SFX.play('rotate'); }
+  }
+
+  S.vy += GRAV;
+  S.py += S.vy;
+
+  // land on a platform
+  const g = landing(S.px, S.py, S.vy);
+  if(g !== null){ S.py = g; S.vy = 0; }
+
+  // walls of the room
+  const ex = R().exits || {};
+  if(S.px < 3){
+    const dest = val(ex.left);
+    if(dest) { go(dest, VW - 20); return; }
+    S.px = 3;
+  }
+  if(S.px > VW - 3){
+    const dest = val(ex.right);
+    if(dest) { go(dest, 20); return; }
+    if(R().blockedRight && !talking() && tick % 40 === 0) say(R().blockedRight);
+    S.px = VW - 3;
+  }
+
+  // hazards and long drops
+  for(const h of hazs()){
+    if(S.px > h.x && S.px < h.x + h.w && S.py > h.y && S.py < h.y + h.h) return die(h.msg);
+  }
+  if(S.py > VH + 40) return die('You fall. You keep falling. The falling is, briefly, the least of your problems.');
+
+  if(boulder){
+    boulder.x -= BOULDER_SPEED;
+    boulder.spin -= 0.14;
+    if(Math.abs(boulder.x - S.px) < 16 && S.py > boulder.y - 20)
+      return die('The boulder catches up with you. It has been waiting nine hundred years for this and it is not in a hurry to apologise.');
+    if(boulder.x < -40) boulder = null;
+  }
+}
+
+function standing(){
+  for(const p of plats())
+    if(S.px > p.x - 2 && S.px < p.x + p.w + 2 && Math.abs(S.py - p.y) < 2) return true;
+  return false;
+}
+function landing(x, y, vy){
+  if(vy < 0) return null;
+  for(const p of plats()){
+    if(x > p.x - 2 && x < p.x + p.w + 2){
+      const prev = y - vy;
+      if(prev <= p.y + 1 && y >= p.y) return p.y;
+    }
+  }
+  return null;
+}
+
+function frame(){
+  step();
+  if(S) render();
+  requestAnimationFrame(frame);
+}
+
+/* ============================================================
+   SCREENS
+   ============================================================ */
+const screens = ['titleScreen','pickScreen','deathScreen','menuScreen','cardScreen'];
+const showScreen = id => screens.forEach(s =>
+  document.getElementById(s).classList.toggle('on', s === id));
+const hideScreens = () => screens.forEach(s => document.getElementById(s).classList.remove('on'));
+
+function beginGame(hero){
+  S = freshState(hero);
+  store.del(SAVE_KEY);
+  hideScreens();
+  running = true; paused = false;
+  drawInv();
+  go('clearing', 70);
+}
+function resumeGame(saved){
+  S = saved;
+  if(!S.dials) S.dials = [0,0,0];
+  hideScreens();
+  running = true; paused = false;
+  drawInv();
+  document.getElementById('chapLabel').textContent = R().name;
+}
+
+document.getElementById('startBtn').onclick = () => { SFX.unlock(); showScreen('pickScreen'); };
+document.getElementById('contBtn').onclick  = () => { SFX.unlock(); const sv = loadGame(); if(sv) resumeGame(sv); };
+document.querySelectorAll('.pick').forEach(el => {
+  const go2 = () => { SFX.play('start'); beginGame(el.dataset.hero); };
+  el.addEventListener('click', go2);
+  el.addEventListener('keydown', e => { if(e.key === 'Enter' || e.key === ' ') go2(); });
+});
+document.getElementById('retryBtn').onclick = respawn;
+document.getElementById('menuBtn').onclick = () => {
+  if(!S) return;
+  paused = true;
+  document.getElementById('menuInfo').textContent =
+    HEROES[S.hero].name + '  -  ' + R().name + '  -  ' + S.inv.length + ' item' + (S.inv.length === 1 ? '' : 's') + ' in the satchel';
+  showScreen('menuScreen');
+};
+document.getElementById('resumeBtn').onclick = () => { hideScreens(); paused = false; };
+document.getElementById('restartBtn').onclick = () => { store.del(SAVE_KEY); showScreen('titleScreen'); running = false; };
+document.getElementById('cardBtn').onclick = () => { showScreen('titleScreen'); running = false; };
+
+/* draw the two heroes on the character-select cards */
+function paintPicks(){
+  document.querySelectorAll('.pick').forEach(el => {
+    const c = el.querySelector('canvas'), g = c.getContext('2d');
+    ctxRef.set(g);
+    g.clearRect(0,0,c.width,c.height);
+    g.fillStyle = '#241811'; g.fillRect(0,0,c.width,c.height);
+    drawHero(c.width/2, 118, 1, 0, el.dataset.hero, false, true);
+    ctxRef.set(MAIN_CTX);
+  });
+}
+
+/* ============================================================
+   FIT & BOOT
+   ============================================================ */
+function fit(){
+  const availW = stage.clientWidth - 8;
+  const availH = stage.clientHeight - 8;
+  const scale = Math.max(1, Math.min(availW / VW, availH / VH));
+  cv.style.width  = Math.floor(VW * scale) + 'px';
+  cv.style.height = Math.floor(VH * scale) + 'px';
+  if(talking()) placeSay();
+}
+window.addEventListener('resize', fit);
+window.addEventListener('orientationchange', () => setTimeout(fit, 250));
+
+S = freshState('max');          // a blank hero so the first render has something to draw
+paintPicks();
+drawInv();
+if(loadGame()) document.getElementById('contBtn').style.display = '';
+fit();
+frame();
+</script>
+</body>
+</html>

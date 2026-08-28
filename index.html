@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stella &amp; Dad Arcade</title>
+<style>
+:root{
+  --bg:#07060f; --card:#141130; --line:#2b2456;
+  --text:#eae6ff; --dim:#948dc4; --accent:#ff7a2f; --accent2:#39e6ff;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{
+  background:radial-gradient(1100px 640px at 50% -10%,#241a55 0%,var(--bg) 62%);
+  color:var(--text);font-family:'Trebuchet MS',system-ui,sans-serif;
+  min-height:100vh;padding:28px 16px 60px;
+}
+.wrap{max-width:760px;margin:0 auto}
+h1{
+  font-size:clamp(28px,7vw,46px);letter-spacing:2px;text-align:center;line-height:1.1;
+  background:linear-gradient(92deg,var(--accent),#ffd166 45%,var(--accent2));
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+}
+.sub{text-align:center;color:var(--dim);margin:10px 0 28px;font-size:14px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
+a.card{
+  display:block;text-decoration:none;color:inherit;background:var(--card);
+  border:1px solid var(--line);border-radius:18px;padding:18px;
+  transition:transform .12s ease,border-color .12s ease,box-shadow .12s ease;
+}
+a.card:hover{transform:translateY(-3px);border-color:var(--accent);box-shadow:0 12px 34px rgba(255,122,47,.16)}
+a.card:active{transform:translateY(0)}
+.card .ico{font-size:32px;line-height:1}
+.card h2{font-size:19px;margin:10px 0 6px;letter-spacing:1px}
+.card p{color:var(--dim);font-size:13px;line-height:1.5}
+.card .tag{
+  display:inline-block;margin-top:12px;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;
+  color:#0f0a1e;background:var(--accent2);border-radius:20px;padding:3px 10px;font-weight:bold;
+}
+.card .tag.hot{background:var(--accent);color:#170a02}
+footer{margin-top:34px;text-align:center;color:#6b6497;font-size:12px;line-height:1.8}
+footer code{background:#171335;padding:2px 6px;border-radius:5px;color:#a79dde}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>STELLA &amp; DAD ARCADE</h1>
+  <p class="sub">Seven games. No installing, no accounts, no ads. Just open and play.<br>Every game has a &#9834; button in the top bar to turn the sound on and off.</p>
+
+  <div class="grid">
+    <a class="card" href="games/soccer.html">
+      <div class="ico">&#9917;</div>
+      <h2>Soccer Duel</h2>
+      <p>Two players, one ball. Hold DASH to charge up and blast it. Play on one screen, against the computer, or phone&#8209;to&#8209;phone with a room code.</p>
+      <span class="tag hot">2 player</span>
+    </a>
+
+    <a class="card" href="games/relic.html">
+      <div class="ico">&#127963;</div>
+      <h2>Relic Hunter</h2>
+      <p>A jungle temple, four traps and a rival with a worse hat. Walk, jump, look at things, pick things up and use them on other things.</p>
+      <span class="tag hot">Adventure</span>
+    </a>
+
+    <a class="card" href="games/blockblast.html">
+      <div class="ico">&#128142;</div>
+      <h2>Block Blast</h2>
+      <p>Drop shapes onto an 8&times;8 board. Fill a whole row or column and it blasts. Nothing falls &mdash; the only pressure is running out of room.</p>
+      <span class="tag">Puzzle</span>
+    </a>
+
+    <a class="card" href="games/bubblepop.html">
+      <div class="ico">&#127754;</div>
+      <h2>Bubble Pop</h2>
+      <p>Fire bubbles up the screen and match three. Anything left hanging with nothing above it falls too &mdash; that&rsquo;s where the big scores are.</p>
+      <span class="tag">Arcade</span>
+    </a>
+
+    <a class="card" href="games/blockdrop.html">
+      <div class="ico">&#129513;</div>
+      <h2>Block Drop</h2>
+      <p>Falling blocks, neon glow. Every 10 lines you earn a Firebomb that blows a 3&times;3 hole wherever you drop it.</p>
+      <span class="tag">Arcade</span>
+    </a>
+
+    <a class="card" href="games/viper.html">
+      <div class="ico">&#128016;</div>
+      <h2>Viper</h2>
+      <p>Snake with a golden ball worth triple &mdash; but it vanishes if you take too long. Named after the Vipers.</p>
+      <span class="tag">Arcade</span>
+    </a>
+
+    <a class="card" href="games/sudoku.html">
+      <div class="ico">&#129518;</div>
+      <h2>Sudoku</h2>
+      <p>Fresh puzzle every time, generated on the spot. Four difficulties, pencil notes, hints and a timer.</p>
+      <span class="tag">Puzzle</span>
+    </a>
+  </div>
+
+  <footer>
+    Built together. Every game file has a <code>TWEAK ME</code> block near the top &mdash;<br>
+    change the numbers and colours, hit reload, see what happens.
+  </footer>
+</div>
+</body>
+</html>

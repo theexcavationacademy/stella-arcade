@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Soccer Duel</title>
+<style>
+/* ========== TWEAK ME ========== */
+:root{
+  --grass1:#2f7d3a;
+  --grass2:#2a7135;
+  --line:#eaf5ec;
+  --p1:#ff7a2f;      /* Stella - flame orange */
+  --p2:#39a7ff;      /* Dad - blue            */
+  --ui:#0e1712;
+  --text:#eafaf0;
+  --dim:#8fb39d;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overscroll-behavior:none}
+body{
+  background:#08120c;color:var(--text);
+  font-family:'Trebuchet MS',system-ui,sans-serif;
+  display:flex;flex-direction:column;align-items:center;overflow:hidden;touch-action:none;
+  user-select:none;
+}
+a{color:#7fe0a5;text-decoration:none}
+header{width:100%;display:flex;align-items:center;gap:8px;padding:6px 10px;flex:0 0 auto;font-size:13px;
+  position:relative;z-index:20;background:#08120c}
+header h1{font-size:14px;letter-spacing:3px;text-transform:uppercase;color:#bff0cf}
+header .sp{flex:1}
+.btn{background:#12271a;border:1px solid #22452e;color:var(--text);border-radius:9px;
+  padding:6px 11px;font-size:13px;cursor:pointer;font-family:inherit}
+.btn:active{background:#1d3d28}
+#stage{flex:1;width:100%;position:relative;min-height:0}
+canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+#hint{position:absolute;left:0;right:0;bottom:8px;text-align:center;font-size:12px;color:var(--dim);pointer-events:none}
+
+/* menu */
+#menu{position:fixed;inset:0;background:linear-gradient(160deg,#0b1f14,#08120c);z-index:10;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;
+  padding:24px;z-index:10;text-align:center;overflow:auto}
+#menu h2{font-size:26px;letter-spacing:2px;color:#bff0cf}
+#menu p{color:var(--dim);font-size:13px;max-width:340px;line-height:1.6}
+.big{background:#3ada78;color:#04180c;border:none;font-weight:bold;padding:15px 22px;
+  font-size:16px;border-radius:14px;font-family:inherit;cursor:pointer;min-width:250px}
+.big.alt{background:#12271a;color:var(--text);border:1px solid #2a5a3a}
+#codeBox{display:none;flex-direction:column;gap:10px;align-items:center}
+#code{font-size:44px;letter-spacing:10px;font-weight:bold;color:#ffd93d;
+  background:#0e2116;border:1px solid #2a5a3a;border-radius:14px;padding:12px 8px 12px 18px;min-width:250px}
+#joinInput{font-size:28px;letter-spacing:8px;text-align:center;text-transform:uppercase;
+  background:#0e2116;border:1px solid #2a5a3a;color:var(--text);border-radius:14px;
+  padding:12px;width:250px;font-family:inherit}
+#netMsg{font-size:13px;color:#ffd93d;min-height:18px}
+
+/* touch controls */
+.stick{position:absolute;width:150px;height:150px;border-radius:50%;
+  border:2px solid rgba(255,255,255,.16);background:rgba(255,255,255,.05);display:none;
+  touch-action:none}
+.stick .knob{position:absolute;width:60px;height:60px;border-radius:50%;
+  background:rgba(255,255,255,.30);left:45px;top:45px}
+.dash{position:absolute;width:82px;height:82px;border-radius:50%;display:none;
+  border:2px solid rgba(255,255,255,.2);background:rgba(255,217,61,.16);
+  color:#ffd93d;font-size:13px;font-weight:bold;font-family:inherit;
+  align-items:center;justify-content:center;letter-spacing:1px}
+.dash:active{background:rgba(255,217,61,.5)}
+body.touch .stick,body.touch .dash{display:flex}
+#stick1{left:14px;bottom:14px} #dash1{left:176px;bottom:32px}
+#stick2{right:14px;bottom:14px} #dash2{right:176px;bottom:32px}
+body.solo #stick2,body.solo #dash2{display:none}
+
+#result{position:fixed;inset:0;background:rgba(8,18,12,.94);display:none;
+  flex-direction:column;align-items:center;justify-content:center;gap:16px;z-index:11;text-align:center;padding:24px}
+#result h2{font-size:34px}
+
+.btn.muted,button.muted{opacity:.45;text-decoration:line-through}
+</style>
+</head>
+<body>
+
+<header>
+  <a class="btn" href="../index.html">&#8592; Arcade</a>
+  <h1>Soccer Duel</h1>
+  <span class="sp"></span>
+  <span id="conn" style="color:var(--dim)"></span>
+  <button class="btn" id="sndBtn" title="Sound on/off">&#9834; ON</button>
+  <button class="btn" id="menuBtn">Menu</button>
+</header>
+
+<div id="stage">
+  <canvas id="cv"></canvas>
+  <div class="stick" id="stick1"><div class="knob"></div></div>
+  <div class="dash" id="dash1">DASH</div>
+  <div class="stick" id="stick2"><div class="knob"></div></div>
+  <div class="dash" id="dash2">DASH</div>
+  <div id="hint"></div>
+</div>
+
+<div id="menu">
+  <h2>Soccer Duel</h2>
+  <p>First to 5 goals. Hold DASH to charge, let go to blast the ball.</p>
+  <button class="big" id="btnLocal">Two players, one screen</button>
+  <button class="big alt" id="btnHost">Host a game (phone to phone)</button>
+  <button class="big alt" id="btnJoin">Join a game</button>
+  <button class="big alt" id="btnSolo">Play the computer</button>
+  <div id="codeBox">
+    <div id="code">----</div>
+    <div id="netMsg"></div>
+    <button class="big alt" id="btnBack">Back</button>
+  </div>
+  <p id="menuNote" style="color:#5d7a68"></p>
+</div>
+
+<div id="result">
+  <h2 id="resultTitle"></h2>
+  <p id="resultText" style="color:var(--dim)"></p>
+  <button class="big" id="againBtn">Rematch</button>
+  <button class="big alt" id="menuBtn2">Menu</button>
+</div>
+
+<script src="../vendor/peerjs.min.js"></script>
+<script>
+/* ============================================================
+   SOUND  -  every noise in this arcade is made by maths, not
+   by audio files. That's why the whole game is one small file.
+   Tap the music note in the top bar to turn sound off.
+   ============================================================ */
+const SFX = (function(){
+  let ctx = null, on = true;
+  try { on = localStorage.getItem('arcade_sound') !== 'off'; } catch(e){}
+
+  function ac(){
+    if(!ctx){
+      try { ctx = new (window.AudioContext || window.webkitAudioContext)(); }
+      catch(e){ return null; }
+    }
+    if(ctx.state === 'suspended') ctx.resume();
+    return ctx;
+  }
+
+  // one beep: f = start pitch, f2 = pitch to slide to, d = seconds
+  function tone(o){
+    if(!on) return;
+    const c = ac(); if(!c) return;
+    const t0 = c.currentTime + (o.delay || 0);
+    const osc = c.createOscillator(), g = c.createGain();
+    osc.type = o.type || 'square';
+    osc.frequency.setValueAtTime(o.f, t0);
+    if(o.f2) osc.frequency.exponentialRampToValueAtTime(Math.max(20, o.f2), t0 + o.d);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(o.v || 0.14, t0 + 0.006);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + o.d);
+    osc.connect(g); g.connect(c.destination);
+    osc.start(t0); osc.stop(t0 + o.d + 0.03);
+  }
+
+  // static-ish burst, good for thuds, kicks and explosions
+  function noise(o){
+    if(!on) return;
+    const c = ac(); if(!c) return;
+    const t0 = c.currentTime + (o.delay || 0);
+    const len = Math.floor(c.sampleRate * o.d);
+    const buf = c.createBuffer(1, len, c.sampleRate);
+    const data = buf.getChannelData(0);
+    for(let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = c.createBufferSource(); src.buffer = buf;
+    const flt = c.createBiquadFilter();
+    flt.type = o.hp ? 'highpass' : 'lowpass';
+    flt.frequency.setValueAtTime(o.cut || 1200, t0);
+    const g = c.createGain();
+    g.gain.setValueAtTime(o.v || 0.14, t0);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + o.d);
+    src.connect(flt); flt.connect(g); g.connect(c.destination);
+    src.start(t0);
+  }
+
+  // a little run of notes
+  function seq(notes, type, step, d, v){
+    notes.forEach((f, i) => tone({ f, d: d || 0.10, type: type || 'triangle', delay: i * (step || 0.07), v: v || 0.13 }));
+  }
+
+  const LIB = {
+    click:  () => tone({ f:660, d:.04, v:.10 }),
+    move:   () => tone({ f:300, d:.03, v:.06 }),
+    rotate: () => tone({ f:460, f2:600, d:.05, v:.09 }),
+    lock:   () => tone({ f:150, d:.06, type:'triangle', v:.12 }),
+    drop:   () => { tone({ f:260, f2:70, d:.12, type:'sawtooth', v:.12 }); noise({ d:.06, cut:900, v:.10 }); },
+    hold:   () => tone({ f:520, f2:400, d:.07, type:'triangle' }),
+
+    // line clears get brighter the more lines you take at once
+    clear1: () => seq([523, 784], 'triangle', .06, .10),
+    clear2: () => seq([523, 659, 880], 'triangle', .055, .10),
+    clear3: () => seq([523, 659, 880, 1047], 'triangle', .05, .10),
+    clear4: () => seq([523, 659, 880, 1047, 1319], 'square', .05, .12, .15),
+
+    bomb:   () => { noise({ d:.42, cut:700, v:.24 }); tone({ f:180, f2:35, d:.42, type:'sawtooth', v:.18 }); },
+    eat:    () => tone({ f:520, f2:820, d:.08, type:'square', v:.12 }),
+    gold:   () => seq([784, 988, 1319], 'square', .055, .09, .13),
+    die:    () => { tone({ f:320, f2:60, d:.55, type:'sawtooth', v:.16 }); noise({ d:.3, cut:500, v:.12, delay:.05 }); },
+
+    place:  () => tone({ f:340, f2:420, d:.05, type:'triangle', v:.10 }),
+    bad:    () => { tone({ f:200, d:.10, type:'square', v:.12 }); tone({ f:150, d:.14, type:'square', v:.12, delay:.09 }); },
+    hint:   () => seq([880, 1175], 'sine', .06, .09, .12),
+
+    kick:   () => { noise({ d:.05, cut:2200, hp:true, v:.16 }); tone({ f:190, f2:110, d:.07, type:'triangle', v:.14 }); },
+    dash:   () => tone({ f:200, f2:900, d:.18, type:'sawtooth', v:.13 }),
+    bounce: () => tone({ f:420, d:.03, v:.07 }),
+    goal:   () => seq([659, 784, 1047], 'square', .09, .14, .15),
+    shoot:  () => tone({ f:300, f2:720, d:.06, type:'square', v:.10 }),
+    pop:    () => tone({ f:700, f2:1300, d:.07, type:'sine', v:.14 }),
+    fall:   () => tone({ f:600, f2:180, d:.20, type:'sine', v:.10 }),
+    combo:  () => seq([880, 1175, 1568], 'sine', .05, .08, .13),
+
+    win:    () => seq([523, 659, 784, 1047, 1319], 'square', .10, .16, .15),
+    lose:   () => seq([392, 330, 262], 'sawtooth', .13, .22, .13),
+    start:  () => seq([523, 784], 'square', .07, .09, .11)
+  };
+
+  // pitch-shifted pop, so a long chain of pops climbs the scale
+  function popAt(n){
+    if(!on) return;
+    const base = 620 * Math.pow(1.09, Math.min(n, 14));
+    tone({ f: base, f2: base * 1.9, d:.07, type:'sine', v:.14 });
+  }
+
+  const api = {
+    play(name){ const f = LIB[name]; if(f) f(); },
+    popAt,
+    get on(){ return on; },
+    unlock(){ ac(); },
+    toggle(){
+      on = !on;
+      try { localStorage.setItem('arcade_sound', on ? 'on' : 'off'); } catch(e){}
+      if(on) LIB.click();
+      return on;
+    }
+  };
+
+  // browsers only allow sound after the player touches something
+  const wake = () => api.unlock();
+  window.addEventListener('pointerdown', wake, { once:false });
+  window.addEventListener('keydown', wake, { once:false });
+
+  // hook up the toggle button in the top bar, if this page has one
+  function mount(){
+    const btn = document.getElementById('sndBtn');
+    if(!btn) return;
+    const paint = () => {
+      btn.textContent = on ? '♪ ON' : '♪ OFF';
+      btn.classList.toggle('muted', !on);
+      btn.setAttribute('aria-label', on ? 'Sound is on' : 'Sound is off');
+    };
+    btn.addEventListener('click', () => { api.unlock(); api.toggle(); paint(); });
+    paint();
+  }
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount);
+  else mount();
+
+  return api;
+})();
+
+/* ============================================================
+   SOCCER DUEL  -  Stella vs Dad
+   Modes: same screen, phone-to-phone online, or vs the computer.
+   Physics is simple circles bouncing off each other. Honest and
+   easy to read - poke at the numbers below and see what happens.
+   ============================================================ */
+
+/* ---------- TWEAK ME ---------- */
+const W = 900, H = 540;        // pitch size in game units
+const GOAL_H = 170;            // how tall each goal mouth is
+const P_R = 24, B_R = 13;      // player radius, ball radius
+const ACCEL = 0.85;            // how hard players push
+const P_FRICTION = 0.90;       // player slowdown (1 = ice)
+const B_FRICTION = 0.992;      // ball slowdown
+const MAX_SPEED = 8.5;
+const DASH_POWER = 22;         // impulse when you release a full dash
+const DASH_COST = 100;         // charge needed for a full dash
+const CHARGE_RATE = 2.2;       // charge gained per frame while holding
+const WIN_SCORE = 5;
+/* ------------------------------ */
+
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+let scale = 1, offX = 0, offY = 0;
+
+const state = {
+  mode: 'local',            // local | host | guest | solo
+  p1: null, p2: null, ball: null,
+  s1: 0, s2: 0,
+  kickoff: 0,               // frames of countdown left
+  over: false,
+  running: false
+};
+
+function newPlayer(x, y, colorVar){
+  return { x, y, vx:0, vy:0, charge:0, holding:false, fx:1, fy:0, col:colorVar, flash:0 };
+}
+
+function reset(dir){
+  state.p1 = newPlayer(W*0.25, H/2, 'p1');
+  state.p2 = newPlayer(W*0.75, H/2, 'p2');
+  state.p2.fx = -1;
+  state.ball = { x: W/2, y: H/2, vx: 0, vy: 0 };
+  state.kickoff = 90;
+}
+
+function kickoffDone(){ return state.kickoff <= 0; }
+
+/* ---------- input ---------- */
+const input = {
+  1: { x:0, y:0, dash:false },
+  2: { x:0, y:0, dash:false }
+};
+const keysDown = {};
+document.addEventListener('keydown', e => {
+  keysDown[e.code] = true;
+  if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code)) e.preventDefault();
+});
+document.addEventListener('keyup', e => { keysDown[e.code] = false; });
+
+function readKeys(){
+  const k = keysDown;
+  // Player 1 - WASD, dash on Left Shift
+  let x = (k.KeyD ? 1 : 0) - (k.KeyA ? 1 : 0);
+  let y = (k.KeyS ? 1 : 0) - (k.KeyW ? 1 : 0);
+  if(state.mode === 'local' || state.mode === 'solo' || state.mode === 'host'){
+    input[1].x = x || touch[1].x; input[1].y = y || touch[1].y;
+    input[1].dash = !!k.ShiftLeft || !!k.Space || touch[1].dash;
+  }
+  // Player 2 - arrows, dash on Right Shift or Enter
+  let x2 = (k.ArrowRight ? 1 : 0) - (k.ArrowLeft ? 1 : 0);
+  let y2 = (k.ArrowDown ? 1 : 0) - (k.ArrowUp ? 1 : 0);
+  if(state.mode === 'local'){
+    input[2].x = x2 || touch[2].x; input[2].y = y2 || touch[2].y;
+    input[2].dash = !!k.ShiftRight || !!k.Enter || !!k.NumpadEnter || touch[2].dash;
+  }
+  if(state.mode === 'guest'){
+    // guest drives player 2 with whichever controls it has
+    input[2].x = (x || x2 || touch[1].x); input[2].y = (y || y2 || touch[1].y);
+    input[2].dash = !!k.ShiftLeft || !!k.ShiftRight || !!k.Space || !!k.Enter || touch[1].dash;
+  }
+}
+
+/* touch sticks */
+const touch = { 1:{x:0,y:0,dash:false}, 2:{x:0,y:0,dash:false} };
+function bindStick(el, slot){
+  const knob = el.querySelector('.knob');
+  let id = null, cx = 0, cy = 0;
+  const R = 45;
+  const start = e => {
+    const t = e.changedTouches ? e.changedTouches[0] : e;
+    id = e.changedTouches ? t.identifier : 'mouse';
+    const r = el.getBoundingClientRect();
+    cx = r.left + r.width/2; cy = r.top + r.height/2;
+    move(e);
+  };
+  const move = e => {
+    const list = e.changedTouches ? Array.from(e.changedTouches) : [e];
+    const t = e.changedTouches ? list.find(t => t.identifier === id) : e;
+    if(!t) return;
+    let dx = t.clientX - cx, dy = t.clientY - cy;
+    const d = Math.hypot(dx, dy) || 1;
+    const cl = Math.min(d, R);
+    dx = dx / d * cl; dy = dy / d * cl;
+    knob.style.transform = 'translate(' + dx + 'px,' + dy + 'px)';
+    touch[slot].x = dx / R; touch[slot].y = dy / R;
+    e.preventDefault();
+  };
+  const end = e => {
+    id = null;
+    knob.style.transform = '';
+    touch[slot].x = 0; touch[slot].y = 0;
+  };
+  el.addEventListener('touchstart', start, {passive:false});
+  el.addEventListener('touchmove', move, {passive:false});
+  el.addEventListener('touchend', end);
+  el.addEventListener('touchcancel', end);
+}
+function bindDash(el, slot){
+  const on = e => { e.preventDefault(); touch[slot].dash = true; };
+  const off = e => { touch[slot].dash = false; };
+  el.addEventListener('touchstart', on, {passive:false});
+  el.addEventListener('touchend', off);
+  el.addEventListener('touchcancel', off);
+  el.addEventListener('mousedown', on);
+  el.addEventListener('mouseup', off);
+  el.addEventListener('mouseleave', off);
+}
+bindStick(document.getElementById('stick1'), 1);
+bindStick(document.getElementById('stick2'), 2);
+bindDash(document.getElementById('dash1'), 1);
+bindDash(document.getElementById('dash2'), 2);
+if(matchMedia('(pointer:coarse)').matches) document.body.classList.add('touch');
+
+/* ---------- physics ---------- */
+function drivePlayer(p, inp){
+  let ix = inp.x, iy = inp.y;
+  const m = Math.hypot(ix, iy);
+  if(m > 1){ ix /= m; iy /= m; }
+  const mag = Math.hypot(ix, iy);
+  if(mag > 0.1){ p.fx = ix / mag; p.fy = iy / mag; }   // which way you're facing
+
+  if(inp.dash){
+    p.holding = true;
+    p.charge = Math.min(DASH_COST, p.charge + CHARGE_RATE);
+  } else if(p.holding){
+    // released - fire off in the direction you're facing
+    const power = (p.charge / DASH_COST) * DASH_POWER;
+    if(p.charge > 12) SFX.play('dash');
+    p.vx += p.fx * power; p.vy += p.fy * power;
+    p.flash = 12;
+    p.charge = 0; p.holding = false;
+  }
+
+  const slow = inp.dash ? 0.35 : 1;   // you move slowly while charging
+  p.vx += ix * ACCEL * slow;
+  p.vy += iy * ACCEL * slow;
+  p.vx *= P_FRICTION; p.vy *= P_FRICTION;
+
+  const sp = Math.hypot(p.vx, p.vy);
+  const cap = MAX_SPEED + (p.flash > 0 ? DASH_POWER : 0);
+  if(sp > cap){ p.vx = p.vx / sp * cap; p.vy = p.vy / sp * cap; }
+  if(p.flash > 0) p.flash--;
+
+  p.x += p.vx; p.y += p.vy;
+
+  if(p.x < P_R){ p.x = P_R; p.vx *= -0.4; }
+  if(p.x > W - P_R){ p.x = W - P_R; p.vx *= -0.4; }
+  if(p.y < P_R){ p.y = P_R; p.vy *= -0.4; }
+  if(p.y > H - P_R){ p.y = H - P_R; p.vy *= -0.4; }
+}
+
+function bumpPlayers(a, b){
+  const dx = b.x - a.x, dy = b.y - a.y;
+  const d = Math.hypot(dx, dy);
+  if(d === 0 || d >= P_R * 2) return;
+  const nx = dx / d, ny = dy / d;
+  const overlap = P_R * 2 - d;
+  a.x -= nx * overlap / 2; a.y -= ny * overlap / 2;
+  b.x += nx * overlap / 2; b.y += ny * overlap / 2;
+  const rel = (b.vx - a.vx) * nx + (b.vy - a.vy) * ny;
+  if(rel > 0) return;
+  const imp = -rel * 0.9;
+  a.vx -= nx * imp; a.vy -= ny * imp;
+  b.vx += nx * imp; b.vy += ny * imp;
+}
+
+function hitBall(p, ball){
+  const dx = ball.x - p.x, dy = ball.y - p.y;
+  const d = Math.hypot(dx, dy);
+  if(d === 0 || d >= P_R + B_R) return;
+  const nx = dx / d, ny = dy / d;
+  ball.x = p.x + nx * (P_R + B_R);
+  ball.y = p.y + ny * (P_R + B_R);
+  const sp = Math.hypot(p.vx, p.vy);
+  SFX.play('kick');
+  const boost = 3 + sp * 1.35;
+  ball.vx = nx * boost + p.vx * 0.35;
+  ball.vy = ny * boost + p.vy * 0.35;
+}
+
+function moveBall(b){
+  b.x += b.vx; b.y += b.vy;
+  b.vx *= B_FRICTION; b.vy *= B_FRICTION;
+  const inGoalBand = b.y > (H - GOAL_H)/2 && b.y < (H + GOAL_H)/2;
+  if(b.y < B_R){ b.y = B_R; b.vy *= -0.85; if(Math.abs(b.vy) > 3) SFX.play('bounce'); }
+  if(b.y > H - B_R){ b.y = H - B_R; b.vy *= -0.85; if(Math.abs(b.vy) > 3) SFX.play('bounce'); }
+  if(!inGoalBand){
+    if(b.x < B_R){ b.x = B_R; b.vx *= -0.85; }
+    if(b.x > W - B_R){ b.x = W - B_R; b.vx *= -0.85; }
+  } else {
+    if(b.x < -B_R * 2) return 2;     // right player (p2) scored
+    if(b.x > W + B_R * 2) return 1;  // left player (p1) scored
+  }
+  const sp = Math.hypot(b.vx, b.vy);
+  if(sp > 26){ b.vx = b.vx/sp*26; b.vy = b.vy/sp*26; }
+  return 0;
+}
+
+/* The computer opponent. AI_SKILL is 0 (hopeless) to 1 (sharp).
+   Turn it down if it's beating you too often. */
+const AI_SKILL = 0.62;
+let aiWobble = { x:0, y:0, t:0 };
+function aiInput(){
+  const p = state.p2, b = state.ball;
+  aiWobble.t--;
+  if(aiWobble.t <= 0){
+    // every so often it aims a bit off - that's what makes it beatable
+    const err = (1 - AI_SKILL) * 190;
+    aiWobble = { x:(Math.random()-0.5)*err, y:(Math.random()-0.5)*err, t: 18 + Math.random()*26 };
+  }
+  // stand goal-side of the ball, then push it back the other way
+  const targetX = b.x + 55 + aiWobble.x, targetY = b.y + aiWobble.y;
+  let dx = targetX - p.x, dy = targetY - p.y;
+  const d = Math.hypot(dx, dy) || 1;
+  const eff = 0.55 + AI_SKILL * 0.45;
+  input[2].x = dx / d * eff;
+  input[2].y = dy / d * eff;
+  input[2].dash = d < 90 && Math.abs(b.x - p.x) < 120 && Math.random() < 0.04 * AI_SKILL;
+  if(p.charge > 55) input[2].dash = false;
+}
+
+function simulate(){
+  if(state.kickoff > 0){ state.kickoff--; return; }
+  if(state.mode === 'solo') aiInput();
+  drivePlayer(state.p1, input[1]);
+  drivePlayer(state.p2, input[2]);
+  bumpPlayers(state.p1, state.p2);
+  hitBall(state.p1, state.ball);
+  hitBall(state.p2, state.ball);
+  const goal = moveBall(state.ball);
+  if(goal){
+    SFX.play('goal');
+    if(goal === 1) state.s1++; else state.s2++;
+    if(state.s1 >= WIN_SCORE || state.s2 >= WIN_SCORE) finish();
+    else reset();
+  }
+}
+
+function finish(){
+  state.over = true;
+  SFX.play('win');
+  const p1Won = state.s1 > state.s2;
+  const names = nameFor();
+  document.getElementById('resultTitle').textContent = (p1Won ? names[0] : names[1]) + ' wins!';
+  document.getElementById('resultText').textContent = state.s1 + ' - ' + state.s2;
+  document.getElementById('result').style.display = 'flex';
+  if(conn && conn.open) conn.send({ t:'over', s1:state.s1, s2:state.s2 });
+}
+
+function nameFor(){
+  if(state.mode === 'solo') return ['You', 'Computer'];
+  if(state.mode === 'host') return ['You (host)', 'Them'];
+  if(state.mode === 'guest') return ['Them', 'You'];
+  return ['Orange', 'Blue'];
+}
+
+/* ---------- drawing ---------- */
+function fit(){
+  const st = document.getElementById('stage');
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  cv.width = st.clientWidth * dpr; cv.height = st.clientHeight * dpr;
+  scale = Math.min(cv.width / W, cv.height / H);
+  offX = (cv.width - W * scale) / 2;
+  offY = (cv.height - H * scale) / 2;
+}
+window.addEventListener('resize', fit);
+window.addEventListener('orientationchange', () => setTimeout(fit, 250));
+
+function draw(){
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.fillStyle = '#08120c';
+  ctx.fillRect(0,0,cv.width,cv.height);
+  ctx.setTransform(scale,0,0,scale,offX,offY);
+
+  // grass with mow stripes
+  for(let i = 0; i < 10; i++){
+    ctx.fillStyle = i % 2 ? '#2a7135' : '#2f7d3a';
+    ctx.fillRect(i * W/10, 0, W/10, H);
+  }
+  ctx.strokeStyle = 'rgba(234,245,236,.75)'; ctx.lineWidth = 3;
+  ctx.strokeRect(6, 6, W-12, H-12);
+  ctx.beginPath(); ctx.moveTo(W/2, 6); ctx.lineTo(W/2, H-6); ctx.stroke();
+  ctx.beginPath(); ctx.arc(W/2, H/2, 74, 0, 7); ctx.stroke();
+  // penalty boxes
+  ctx.strokeRect(6, (H-260)/2, 110, 260);
+  ctx.strokeRect(W-6-110, (H-260)/2, 110, 260);
+  // goals
+  ctx.lineWidth = 6;
+  ctx.strokeStyle = '#ffd93d';
+  ctx.beginPath(); ctx.moveTo(6,(H-GOAL_H)/2); ctx.lineTo(6,(H+GOAL_H)/2); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(W-6,(H-GOAL_H)/2); ctx.lineTo(W-6,(H+GOAL_H)/2); ctx.stroke();
+
+  const px = getComputedStyle(document.documentElement);
+  drawPlayer(state.p1, px.getPropertyValue('--p1').trim());
+  drawPlayer(state.p2, px.getPropertyValue('--p2').trim());
+
+  // ball
+  const b = state.ball;
+  ctx.fillStyle = '#ffffff';
+  ctx.shadowColor = 'rgba(0,0,0,.55)'; ctx.shadowBlur = 12; ctx.shadowOffsetY = 4;
+  ctx.beginPath(); ctx.arc(b.x, b.y, B_R, 0, 7); ctx.fill();
+  ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
+  ctx.fillStyle = '#222'; 
+  for(let i = 0; i < 5; i++){
+    const a = i / 5 * Math.PI * 2 + (b.x + b.y) / 40;
+    ctx.beginPath();
+    ctx.arc(b.x + Math.cos(a)*B_R*0.55, b.y + Math.sin(a)*B_R*0.55, B_R*0.20, 0, 7);
+    ctx.fill();
+  }
+
+  // score
+  ctx.fillStyle = 'rgba(255,255,255,.92)';
+  ctx.font = 'bold 44px Trebuchet MS'; ctx.textAlign = 'center';
+  ctx.fillText(state.s1 + '  -  ' + state.s2, W/2, 52);
+
+  if(state.kickoff > 0){
+    ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(0,0,W,H);
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 84px Trebuchet MS';
+    ctx.fillText(Math.ceil(state.kickoff / 30), W/2, H/2 + 30);
+  }
+}
+
+function drawPlayer(p, col){
+  if(!p) return;
+  ctx.save();
+  // charge ring
+  if(p.charge > 2){
+    ctx.strokeStyle = '#ffd93d'; ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, P_R + 8, -Math.PI/2, -Math.PI/2 + (p.charge/DASH_COST) * Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.shadowColor = 'rgba(0,0,0,.5)'; ctx.shadowBlur = 12; ctx.shadowOffsetY = 5;
+  ctx.fillStyle = col;
+  ctx.beginPath(); ctx.arc(p.x, p.y, P_R, 0, 7); ctx.fill();
+  ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
+  ctx.fillStyle = 'rgba(255,255,255,.85)';
+  ctx.beginPath(); ctx.arc(p.x + p.fx*P_R*0.42, p.y + p.fy*P_R*0.42, P_R*0.26, 0, 7); ctx.fill();
+  if(p.flash > 0){
+    ctx.globalAlpha = p.flash / 12;
+    ctx.strokeStyle = '#ffd93d'; ctx.lineWidth = 5;
+    ctx.beginPath(); ctx.arc(p.x, p.y, P_R + (12 - p.flash) * 2.5, 0, 7); ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+  ctx.restore();
+}
+
+/* ---------- networking (phone to phone) ---------- */
+let peer = null, conn = null, netTick = 0;
+const PREFIX = 'stelladad-';
+const setConn = t => { document.getElementById('conn').textContent = t; };
+const netMsg = t => { document.getElementById('netMsg').textContent = t; };
+
+function makeCode(){
+  const abc = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let s = '';
+  for(let i = 0; i < 4; i++) s += abc[Math.floor(Math.random()*abc.length)];
+  return s;
+}
+
+function peerAvailable(){ return typeof Peer !== 'undefined'; }
+
+function host(){
+  if(!peerAvailable()) return netMsg('Online play needs the internet - use the hosted version of this page.');
+  const code = makeCode();
+  document.getElementById('code').textContent = code;
+  netMsg('Waiting for the other phone...');
+  peer = new Peer(PREFIX + code);
+  peer.on('open', () => netMsg('Room ' + code + ' is open. Waiting...'));
+  peer.on('error', e => netMsg('Trouble: ' + e.type + '. Try Back, then Host again.'));
+  peer.on('connection', c => {
+    conn = c;
+    c.on('open', () => {
+      netMsg('Connected!');
+      setConn('online');
+      startGame('host');
+    });
+    c.on('data', d => { if(d.t === 'in'){ input[2].x = d.x; input[2].y = d.y; input[2].dash = d.d; } });
+    c.on('close', () => { setConn('disconnected'); showMenu(); });
+  });
+}
+
+function join(){
+  if(!peerAvailable()) return netMsg('Online play needs the internet - use the hosted version of this page.');
+  const code = (document.getElementById('joinInput').value || '').toUpperCase().trim();
+  if(code.length !== 4) return netMsg('Type the 4 character code.');
+  netMsg('Connecting to ' + code + '...');
+  peer = new Peer();
+  peer.on('open', () => {
+    conn = peer.connect(PREFIX + code);
+    conn.on('open', () => { netMsg('Connected!'); setConn('online'); startGame('guest'); });
+    conn.on('data', d => {
+      if(d.t === 's'){
+        state.p1.x = d.a[0]; state.p1.y = d.a[1]; state.p1.fx = d.a[2]; state.p1.fy = d.a[3]; state.p1.charge = d.a[4];
+        state.p2.x = d.b[0]; state.p2.y = d.b[1]; state.p2.fx = d.b[2]; state.p2.fy = d.b[3]; state.p2.charge = d.b[4];
+        state.ball.x = d.k[0]; state.ball.y = d.k[1];
+        state.s1 = d.s[0]; state.s2 = d.s[1]; state.kickoff = d.o;
+      } else if(d.t === 'over'){ state.s1 = d.s1; state.s2 = d.s2; finish(); }
+      else if(d.t === 'again'){ document.getElementById('result').style.display = 'none'; state.over = false; state.s1 = state.s2 = 0; reset(); }
+    });
+    conn.on('close', () => { setConn('disconnected'); showMenu(); });
+    conn.on('error', () => netMsg('Could not connect. Check the code.'));
+  });
+  peer.on('error', e => netMsg('Trouble: ' + e.type + '. Check the code and try again.'));
+}
+
+function sendState(){
+  if(!conn || !conn.open) return;
+  netTick++;
+  if(netTick % 2) return;   // ~30 updates a second
+  const r = n => Math.round(n * 10) / 10;
+  conn.send({
+    t:'s',
+    a:[r(state.p1.x), r(state.p1.y), r(state.p1.fx), r(state.p1.fy), Math.round(state.p1.charge)],
+    b:[r(state.p2.x), r(state.p2.y), r(state.p2.fx), r(state.p2.fy), Math.round(state.p2.charge)],
+    k:[r(state.ball.x), r(state.ball.y)],
+    s:[state.s1, state.s2],
+    o:state.kickoff
+  });
+}
+function sendInput(){
+  if(!conn || !conn.open) return;
+  netTick++;
+  if(netTick % 2) return;
+  conn.send({ t:'in', x:input[2].x, y:input[2].y, d:input[2].dash });
+}
+
+/* ---------- loop & menu ---------- */
+function frame(){
+  if(state.running){
+    readKeys();
+    if(state.mode === 'guest'){ sendInput(); }
+    else if(!state.over){ simulate(); if(state.mode === 'host') sendState(); }
+    draw();
+  }
+  requestAnimationFrame(frame);
+}
+
+function startGame(mode){
+  state.mode = mode;
+  state.s1 = 0; state.s2 = 0; state.over = false;
+  reset();
+  document.getElementById('menu').style.display = 'none';
+  document.getElementById('result').style.display = 'none';
+  document.body.classList.toggle('solo', mode !== 'local');
+  const names = nameFor();
+  document.getElementById('hint').textContent =
+    mode === 'local' ? 'Orange: W A S D + Shift   |   Blue: arrows + Enter'
+    : mode === 'solo' ? 'W A S D or the stick. Hold Shift / DASH to charge.'
+    : 'You are ' + (mode === 'host' ? 'ORANGE (left)' : 'BLUE (right)');
+  state.running = true;
+  fit();
+}
+
+function showMenu(){
+  state.running = false;
+  document.getElementById('menu').style.display = 'flex';
+  document.getElementById('result').style.display = 'none';
+  document.getElementById('codeBox').style.display = 'none';
+  document.querySelectorAll('#menu .big').forEach(b => { if(b.id !== 'btnBack') b.style.display = ''; });
+  document.getElementById('joinInput')?.remove();
+  if(peer){ try{ peer.destroy(); }catch(e){} peer = null; conn = null; }
+  setConn('');
+}
+
+document.getElementById('btnLocal').onclick = () => startGame('local');
+document.getElementById('btnSolo').onclick  = () => startGame('solo');
+document.getElementById('btnHost').onclick = () => {
+  document.querySelectorAll('#menu .big').forEach(b => { if(b.id !== 'btnBack') b.style.display = 'none'; });
+  document.getElementById('codeBox').style.display = 'flex';
+  host();
+};
+document.getElementById('btnJoin').onclick = () => {
+  document.querySelectorAll('#menu .big').forEach(b => { if(b.id !== 'btnBack') b.style.display = 'none'; });
+  const box = document.getElementById('codeBox');
+  box.style.display = 'flex';
+  document.getElementById('code').style.display = 'none';
+  if(!document.getElementById('joinInput')){
+    const inp = document.createElement('input');
+    inp.id = 'joinInput'; inp.maxLength = 4; inp.placeholder = 'CODE';
+    box.insertBefore(inp, box.firstChild);
+    const go = document.createElement('button');
+    go.className = 'big'; go.textContent = 'Join'; go.onclick = join;
+    box.insertBefore(go, document.getElementById('netMsg'));
+    inp.focus();
+  }
+};
+document.getElementById('btnBack').onclick = () => { document.getElementById('code').style.display = ''; showMenu(); };
+document.getElementById('menuBtn').onclick = showMenu;
+document.getElementById('menuBtn2').onclick = showMenu;
+document.getElementById('againBtn').onclick = () => {
+  state.s1 = 0; state.s2 = 0; state.over = false; reset();
+  document.getElementById('result').style.display = 'none';
+  if(conn && conn.open) conn.send({ t:'again' });
+};
+
+if(!peerAvailable()){
+  document.getElementById('menuNote').textContent =
+    'Online play is unavailable here (no connection to the matchmaking server). Same-screen and computer modes work fine.';
+}
+
+reset();
+fit();
+draw();
+frame();
+</script>
+</body>
+</html>

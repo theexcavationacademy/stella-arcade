@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Sudoku</title>
+<style>
+/* ==========================================================
+   TWEAK ME  -  colours and sizes live here
+   ========================================================== */
+:root{
+  --bg:#f4f1ea;        /* paper background        */
+  --ink:#232028;       /* pen colour              */
+  --given:#3a3644;     /* the numbers you can't change */
+  --mine:#1668c4;      /* numbers you typed       */
+  --bad:#d13b3b;       /* mistakes                */
+  --sel:#d9e8fb;       /* selected square         */
+  --peer:#eceef2;      /* same row/col/box        */
+  --same:#ffe9b8;      /* same number highlight   */
+  --line:#b9b3a6;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{
+  background:var(--bg);color:var(--ink);
+  font-family:'Avenir Next','Segoe UI',system-ui,sans-serif;
+  min-height:100vh;display:flex;flex-direction:column;align-items:center;
+  touch-action:manipulation;
+}
+a{color:#1668c4;text-decoration:none}
+header{width:100%;max-width:520px;display:flex;align-items:center;gap:10px;padding:10px 12px}
+header h1{font-size:15px;letter-spacing:4px;text-transform:uppercase;font-weight:600}
+header .sp{flex:1}
+.btn{background:#fff;border:1px solid var(--line);color:var(--ink);border-radius:9px;
+  padding:7px 11px;font-size:13px;cursor:pointer;font-family:inherit}
+.btn:active{background:#e7e3da}
+.btn.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+#bar{width:100%;max-width:520px;display:flex;gap:8px;align-items:center;padding:0 12px 8px;font-size:13px;color:#6a6472}
+#bar .sp{flex:1}
+#gridWrap{width:100%;max-width:520px;padding:0 12px}
+table{width:100%;border-collapse:collapse;background:#fff;
+  box-shadow:0 6px 24px rgba(0,0,0,.10);border:2.5px solid var(--ink);border-radius:4px}
+td{
+  width:11.11%;border:1px solid var(--line);text-align:center;vertical-align:middle;
+  position:relative;cursor:pointer;user-select:none;
+}
+td:before{content:'';display:block;padding-top:100%}
+td .n{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  font-size:clamp(18px,6.4vw,30px);font-weight:500}
+td .notes{position:absolute;inset:2px;display:grid;grid-template-columns:repeat(3,1fr);
+  grid-template-rows:repeat(3,1fr);font-size:clamp(7px,2.2vw,11px);color:#8a8494;line-height:1}
+td .notes span{display:flex;align-items:center;justify-content:center}
+tr:nth-child(3n) td{border-bottom:2.5px solid var(--ink)}
+tr:last-child td{border-bottom:none}
+td:nth-child(3n){border-right:2.5px solid var(--ink)}
+td:last-child{border-right:none}
+td.given .n{color:var(--given);font-weight:700}
+td.mine .n{color:var(--mine)}
+td.bad .n{color:var(--bad)}
+td.peer{background:var(--peer)}
+td.same{background:var(--same)}
+td.sel{background:var(--sel);box-shadow:inset 0 0 0 3px #1668c4}
+#keys,.keys{width:100%;max-width:520px;display:grid;grid-template-columns:repeat(5,1fr);gap:8px;padding:12px}
+#keys button,.keys button{
+  background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 0;
+  font-size:22px;font-family:inherit;color:var(--ink);cursor:pointer
+}
+#keys button:active,.keys button:active{background:var(--sel)}
+#keys button.wide,.keys button.wide{grid-column:span 1;font-size:15px}
+#done{
+  position:fixed;inset:0;background:rgba(244,241,234,.95);display:none;
+  flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;padding:24px;z-index:5
+}
+#done h2{font-size:30px}
+#done p{color:#6a6472}
+#done .big{background:var(--ink);color:#fff;border:none;padding:14px 26px;border-radius:12px;
+  font-size:16px;font-family:inherit;cursor:pointer}
+
+.btn.muted,button.muted{opacity:.45;text-decoration:line-through}
+</style>
+</head>
+<body>
+
+<header>
+  <a class="btn" href="../index.html">&#8592; Arcade</a>
+  <h1>Sudoku</h1>
+  <span class="sp"></span>
+  <select class="btn" id="diff">
+    <option value="40">Easy</option>
+    <option value="32" selected>Medium</option>
+    <option value="26">Hard</option>
+    <option value="22">Brutal</option>
+  </select>
+  <button class="btn" id="sndBtn" title="Sound on/off">&#9834; ON</button>
+  <button class="btn" id="newBtn">New</button>
+</header>
+
+<div id="bar">
+  <span id="timer">0:00</span>
+  <span class="sp"></span>
+  <span id="status" style="font-weight:600"></span>
+  <span id="mistakes">Mistakes 0</span>
+  <button class="btn" id="checkBtn">Check</button>
+  <button class="btn" id="hintBtn">Hint</button>
+</div>
+
+<div id="gridWrap"><table id="grid"></table></div>
+
+<div id="keys">
+  <button data-n="1">1</button><button data-n="2">2</button><button data-n="3">3</button>
+  <button data-n="4">4</button><button data-n="5">5</button>
+  <button data-n="6">6</button><button data-n="7">7</button><button data-n="8">8</button>
+  <button data-n="9">9</button>
+  <button class="wide" id="eraseBtn">Erase</button>
+</div>
+<div class="keys" style="grid-template-columns:1fr 1fr;padding-top:0">
+  <button class="wide" id="notesBtn">Notes: off</button>
+  <button class="wide" id="undoBtn">Undo</button>
+</div>
+
+<div id="done">
+  <h2>Solved!</h2>
+  <p id="doneText"></p>
+  <button class="big" id="doneBtn">New puzzle</button>
+</div>
+
+<script>
+/* ============================================================
+   SOUND  -  every noise in this arcade is made by maths, not
+   by audio files. That's why the whole game is one small file.
+   Tap the music note in the top bar to turn sound off.
+   ============================================================ */
+const SFX = (function(){
+  let ctx = null, on = true;
+  try { on = localStorage.getItem('arcade_sound') !== 'off'; } catch(e){}
+
+  function ac(){
+    if(!ctx){
+      try { ctx = new (window.AudioContext || window.webkitAudioContext)(); }
+      catch(e){ return null; }
+    }
+    if(ctx.state === 'suspended') ctx.resume();
+    return ctx;
+  }
+
+  // one beep: f = start pitch, f2 = pitch to slide to, d = seconds
+  function tone(o){
+    if(!on) return;
+    const c = ac(); if(!c) return;
+    const t0 = c.currentTime + (o.delay || 0);
+    const osc = c.createOscillator(), g = c.createGain();
+    osc.type = o.type || 'square';
+    osc.frequency.setValueAtTime(o.f, t0);
+    if(o.f2) osc.frequency.exponentialRampToValueAtTime(Math.max(20, o.f2), t0 + o.d);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(o.v || 0.14, t0 + 0.006);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + o.d);
+    osc.connect(g); g.connect(c.destination);
+    osc.start(t0); osc.stop(t0 + o.d + 0.03);
+  }
+
+  // static-ish burst, good for thuds, kicks and explosions
+  function noise(o){
+    if(!on) return;
+    const c = ac(); if(!c) return;
+    const t0 = c.currentTime + (o.delay || 0);
+    const len = Math.floor(c.sampleRate * o.d);
+    const buf = c.createBuffer(1, len, c.sampleRate);
+    const data = buf.getChannelData(0);
+    for(let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = c.createBufferSource(); src.buffer = buf;
+    const flt = c.createBiquadFilter();
+    flt.type = o.hp ? 'highpass' : 'lowpass';
+    flt.frequency.setValueAtTime(o.cut || 1200, t0);
+    const g = c.createGain();
+    g.gain.setValueAtTime(o.v || 0.14, t0);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + o.d);
+    src.connect(flt); flt.connect(g); g.connect(c.destination);
+    src.start(t0);
+  }
+
+  // a little run of notes
+  function seq(notes, type, step, d, v){
+    notes.forEach((f, i) => tone({ f, d: d || 0.10, type: type || 'triangle', delay: i * (step || 0.07), v: v || 0.13 }));
+  }
+
+  const LIB = {
+    click:  () => tone({ f:660, d:.04, v:.10 }),
+    move:   () => tone({ f:300, d:.03, v:.06 }),
+    rotate: () => tone({ f:460, f2:600, d:.05, v:.09 }),
+    lock:   () => tone({ f:150, d:.06, type:'triangle', v:.12 }),
+    drop:   () => { tone({ f:260, f2:70, d:.12, type:'sawtooth', v:.12 }); noise({ d:.06, cut:900, v:.10 }); },
+    hold:   () => tone({ f:520, f2:400, d:.07, type:'triangle' }),
+
+    // line clears get brighter the more lines you take at once
+    clear1: () => seq([523, 784], 'triangle', .06, .10),
+    clear2: () => seq([523, 659, 880], 'triangle', .055, .10),
+    clear3: () => seq([523, 659, 880, 1047], 'triangle', .05, .10),
+    clear4: () => seq([523, 659, 880, 1047, 1319], 'square', .05, .12, .15),
+
+    bomb:   () => { noise({ d:.42, cut:700, v:.24 }); tone({ f:180, f2:35, d:.42, type:'sawtooth', v:.18 }); },
+    eat:    () => tone({ f:520, f2:820, d:.08, type:'square', v:.12 }),
+    gold:   () => seq([784, 988, 1319], 'square', .055, .09, .13),
+    die:    () => { tone({ f:320, f2:60, d:.55, type:'sawtooth', v:.16 }); noise({ d:.3, cut:500, v:.12, delay:.05 }); },
+
+    place:  () => tone({ f:340, f2:420, d:.05, type:'triangle', v:.10 }),
+    bad:    () => { tone({ f:200, d:.10, type:'square', v:.12 }); tone({ f:150, d:.14, type:'square', v:.12, delay:.09 }); },
+    hint:   () => seq([880, 1175], 'sine', .06, .09, .12),
+
+    kick:   () => { noise({ d:.05, cut:2200, hp:true, v:.16 }); tone({ f:190, f2:110, d:.07, type:'triangle', v:.14 }); },
+    dash:   () => tone({ f:200, f2:900, d:.18, type:'sawtooth', v:.13 }),
+    bounce: () => tone({ f:420, d:.03, v:.07 }),
+    goal:   () => seq([659, 784, 1047], 'square', .09, .14, .15),
+    shoot:  () => tone({ f:300, f2:720, d:.06, type:'square', v:.10 }),
+    pop:    () => tone({ f:700, f2:1300, d:.07, type:'sine', v:.14 }),
+    fall:   () => tone({ f:600, f2:180, d:.20, type:'sine', v:.10 }),
+    combo:  () => seq([880, 1175, 1568], 'sine', .05, .08, .13),
+
+    win:    () => seq([523, 659, 784, 1047, 1319], 'square', .10, .16, .15),
+    lose:   () => seq([392, 330, 262], 'sawtooth', .13, .22, .13),
+    start:  () => seq([523, 784], 'square', .07, .09, .11)
+  };
+
+  // pitch-shifted pop, so a long chain of pops climbs the scale
+  function popAt(n){
+    if(!on) return;
+    const base = 620 * Math.pow(1.09, Math.min(n, 14));
+    tone({ f: base, f2: base * 1.9, d:.07, type:'sine', v:.14 });
+  }
+
+  const api = {
+    play(name){ const f = LIB[name]; if(f) f(); },
+    popAt,
+    get on(){ return on; },
+    unlock(){ ac(); },
+    toggle(){
+      on = !on;
+      try { localStorage.setItem('arcade_sound', on ? 'on' : 'off'); } catch(e){}
+      if(on) LIB.click();
+      return on;
+    }
+  };
+
+  // browsers only allow sound after the player touches something
+  const wake = () => api.unlock();
+  window.addEventListener('pointerdown', wake, { once:false });
+  window.addEventListener('keydown', wake, { once:false });
+
+  // hook up the toggle button in the top bar, if this page has one
+  function mount(){
+    const btn = document.getElementById('sndBtn');
+    if(!btn) return;
+    const paint = () => {
+      btn.textContent = on ? '♪ ON' : '♪ OFF';
+      btn.classList.toggle('muted', !on);
+      btn.setAttribute('aria-label', on ? 'Sound is on' : 'Sound is off');
+    };
+    btn.addEventListener('click', () => { api.unlock(); api.toggle(); paint(); });
+    paint();
+  }
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount);
+  else mount();
+
+  return api;
+})();
+
+/* ============================================================
+   SUDOKU  -  puzzles are generated fresh every time, never
+   pulled from a list. Every puzzle has exactly one solution.
+   ============================================================ */
+
+let solution = [];   // the finished grid
+let puzzle   = [];   // 0 = empty, what the player starts with
+let board    = [];   // what's on screen now
+let notes    = [];   // pencil marks per square
+let history  = [];   // for undo
+let sel = null, notesMode = false, mistakes = 0, startTime = 0, timerId = null, finished = false;
+
+/* ---------- generator ---------- */
+function shuffled(a){
+  a = a.slice();
+  for(let i = a.length - 1; i > 0; i--){
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+function ok(g, r, c, v){
+  for(let i = 0; i < 9; i++){
+    if(g[r][i] === v || g[i][c] === v) return false;
+  }
+  const br = r - r % 3, bc = c - c % 3;
+  for(let y = 0; y < 3; y++) for(let x = 0; x < 3; x++)
+    if(g[br+y][bc+x] === v) return false;
+  return true;
+}
+function fill(g){
+  for(let r = 0; r < 9; r++) for(let c = 0; c < 9; c++){
+    if(g[r][c] === 0){
+      for(const v of shuffled([1,2,3,4,5,6,7,8,9])){
+        if(ok(g, r, c, v)){
+          g[r][c] = v;
+          if(fill(g)) return true;
+          g[r][c] = 0;
+        }
+      }
+      return false;
+    }
+  }
+  return true;
+}
+// counts solutions but stops at 2 - we only care "is it unique?"
+function countSolutions(g, limit){
+  for(let r = 0; r < 9; r++) for(let c = 0; c < 9; c++){
+    if(g[r][c] === 0){
+      let total = 0;
+      for(let v = 1; v <= 9; v++){
+        if(ok(g, r, c, v)){
+          g[r][c] = v;
+          total += countSolutions(g, limit - total);
+          g[r][c] = 0;
+          if(total >= limit) return total;
+        }
+      }
+      return total;
+    }
+  }
+  return 1;
+}
+function generate(clues){
+  const g = Array.from({length:9}, () => Array(9).fill(0));
+  fill(g);
+  solution = g.map(r => r.slice());
+  const p = g.map(r => r.slice());
+  const cells = shuffled(Array.from({length:81}, (_, i) => i));
+  let filled = 81;
+  for(const idx of cells){
+    if(filled <= clues) break;
+    const r = Math.floor(idx / 9), c = idx % 9;
+    if(p[r][c] === 0) continue;
+    const backup = p[r][c];
+    p[r][c] = 0;
+    if(countSolutions(p.map(x => x.slice()), 2) !== 1) p[r][c] = backup;
+    else filled--;
+  }
+  return p;
+}
+
+/* ---------- build the table ---------- */
+const table = document.getElementById('grid');
+function build(){
+  table.innerHTML = '';
+  for(let r = 0; r < 9; r++){
+    const tr = document.createElement('tr');
+    for(let c = 0; c < 9; c++){
+      const td = document.createElement('td');
+      td.dataset.r = r; td.dataset.c = c;
+      td.innerHTML = '<div class="notes"></div><div class="n"></div>';
+      td.addEventListener('click', () => { sel = [r, c]; render(); });
+      tr.appendChild(td);
+    }
+    table.appendChild(tr);
+  }
+}
+
+function cellAt(r, c){ return table.rows[r].cells[c]; }
+
+function render(){
+  for(let r = 0; r < 9; r++) for(let c = 0; c < 9; c++){
+    const td = cellAt(r, c);
+    const v = board[r][c];
+    td.className = '';
+    td.querySelector('.n').textContent = v ? v : '';
+    const nd = td.querySelector('.notes');
+    nd.innerHTML = '';
+    if(!v && notes[r][c].size){
+      for(let n = 1; n <= 9; n++){
+        const s = document.createElement('span');
+        s.textContent = notes[r][c].has(n) ? n : '';
+        nd.appendChild(s);
+      }
+    }
+    if(puzzle[r][c]) td.classList.add('given');
+    else if(v){
+      td.classList.add('mine');
+      if(v !== solution[r][c]) td.classList.add('bad');
+    }
+    if(sel){
+      const [sr, sc] = sel;
+      const sameBox = Math.floor(r/3) === Math.floor(sr/3) && Math.floor(c/3) === Math.floor(sc/3);
+      if(r === sr && c === sc) td.classList.add('sel');
+      else if(r === sr || c === sc || sameBox) td.classList.add('peer');
+      const sv = board[sr][sc];
+      if(sv && v === sv && !(r === sr && c === sc)) td.classList.add('same');
+    }
+  }
+}
+
+function place(n){
+  if(!sel || finished) return;
+  const [r, c] = sel;
+  if(puzzle[r][c]) return;
+  history.push({ r, c, v: board[r][c], notes: new Set(notes[r][c]) });
+  if(notesMode && n){
+    if(board[r][c]) board[r][c] = 0;
+    if(notes[r][c].has(n)) notes[r][c].delete(n); else notes[r][c].add(n);
+  } else {
+    board[r][c] = n;
+    notes[r][c].clear();
+    if(n && n === solution[r][c]) SFX.play('place');
+    if(n && n !== solution[r][c]){
+      SFX.play('bad');
+      mistakes++;
+      document.getElementById('mistakes').textContent = 'Mistakes ' + mistakes;
+    }
+    if(n) clearPeerNotes(r, c, n);
+  }
+  render();
+  checkDone();
+}
+
+function clearPeerNotes(r, c, n){
+  for(let i = 0; i < 9; i++){ notes[r][i].delete(n); notes[i][c].delete(n); }
+  const br = r - r % 3, bc = c - c % 3;
+  for(let y = 0; y < 3; y++) for(let x = 0; x < 3; x++) notes[br+y][bc+x].delete(n);
+}
+
+function undo(){
+  const last = history.pop();
+  if(!last) return;
+  board[last.r][last.c] = last.v;
+  notes[last.r][last.c] = last.notes;
+  render();
+}
+
+function hint(){
+  if(finished) return;
+  const empties = [];
+  for(let r = 0; r < 9; r++) for(let c = 0; c < 9; c++)
+    if(board[r][c] !== solution[r][c]) empties.push([r, c]);
+  if(!empties.length) return;
+  const [r, c] = empties[Math.floor(Math.random() * empties.length)];
+  history.push({ r, c, v: board[r][c], notes: new Set(notes[r][c]) });
+  board[r][c] = solution[r][c];
+  notes[r][c].clear();
+  sel = [r, c];
+  SFX.play('hint');
+  render();
+  checkDone();
+}
+
+function checkDone(){
+  for(let r = 0; r < 9; r++) for(let c = 0; c < 9; c++)
+    if(board[r][c] !== solution[r][c]) return;
+  finished = true;
+  SFX.play('win');
+  clearInterval(timerId);
+  document.getElementById('doneText').textContent =
+    document.getElementById('timer').textContent + '  -  ' + mistakes + ' mistake' + (mistakes === 1 ? '' : 's');
+  document.getElementById('done').style.display = 'flex';
+}
+
+function newGame(){
+  const clues = parseInt(document.getElementById('diff').value, 10);
+  puzzle = generate(clues);
+  board  = puzzle.map(r => r.slice());
+  notes  = Array.from({length:9}, () => Array.from({length:9}, () => new Set()));
+  history = []; sel = null; mistakes = 0; finished = false;
+  document.getElementById('mistakes').textContent = 'Mistakes 0';
+  document.getElementById('done').style.display = 'none';
+  clearInterval(timerId);
+  startTime = Date.now();
+  timerId = setInterval(() => {
+    const s = Math.floor((Date.now() - startTime) / 1000);
+    document.getElementById('timer').textContent =
+      Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+  }, 500);
+  document.getElementById('timer').textContent = '0:00';
+  render();
+}
+
+/* ---------- controls ---------- */
+document.querySelectorAll('#keys button[data-n]').forEach(b => {
+  b.onclick = () => place(parseInt(b.dataset.n, 10));
+});
+document.getElementById('eraseBtn').onclick = () => place(0);
+document.getElementById('notesBtn').onclick = e => {
+  notesMode = !notesMode;
+  e.target.textContent = 'Notes: ' + (notesMode ? 'ON' : 'off');
+  e.target.classList.toggle('on', notesMode);
+};
+document.getElementById('undoBtn').onclick = undo;
+document.getElementById('hintBtn').onclick = hint;
+document.getElementById('newBtn').onclick = newGame;
+document.getElementById('doneBtn').onclick = newGame;
+document.getElementById('diff').onchange = newGame;
+document.getElementById('checkBtn').onclick = () => {
+  let wrong = 0;
+  for(let r = 0; r < 9; r++) for(let c = 0; c < 9; c++)
+    if(board[r][c] && board[r][c] !== solution[r][c]) wrong++;
+  const el = document.getElementById('status');
+  el.textContent = wrong === 0 ? 'All good so far'
+                 : wrong + ' wrong (in red)';
+  el.style.color = wrong === 0 ? '#1a8a4a' : '#d13b3b';
+  clearTimeout(el._t);
+  el._t = setTimeout(() => { el.textContent = ''; }, 2600);
+};
+
+document.addEventListener('keydown', e => {
+  if(e.key >= '1' && e.key <= '9'){ place(parseInt(e.key, 10)); return; }
+  if(e.key === 'Backspace' || e.key === 'Delete' || e.key === '0'){ place(0); return; }
+  if(e.key === 'n' || e.key === 'N'){ document.getElementById('notesBtn').click(); return; }
+  if(!sel) return;
+  let [r, c] = sel;
+  if(e.key === 'ArrowUp') r = (r + 8) % 9;
+  else if(e.key === 'ArrowDown') r = (r + 1) % 9;
+  else if(e.key === 'ArrowLeft') c = (c + 8) % 9;
+  else if(e.key === 'ArrowRight') c = (c + 1) % 9;
+  else return;
+  e.preventDefault();
+  sel = [r, c];
+  render();
+});
+
+build();
+newGame();
+</script>
+</body>
+</html>

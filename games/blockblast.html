@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Block Blast</title>
+<style>
+/* ==========================================================
+   TWEAK ME  -  colours first, game numbers are in the script
+   ========================================================== */
+:root{
+  --bg:#0a0a1d;
+  --panel:#161535;
+  --hole:#1e1d44;       /* an empty square on the board */
+  --line:#2f2d64;
+  --text:#f0eeff;
+  --dim:#9a94d4;
+  --hot:#ff4f9a;        /* the accent - candy pink */
+  --good:#54e6a0;
+  --bad:#ff5c5c;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{
+  background:radial-gradient(900px 560px at 50% -8%,#241f5c 0%,var(--bg) 62%);
+  color:var(--text);font-family:'Trebuchet MS',system-ui,sans-serif;
+  display:flex;flex-direction:column;align-items:center;
+  overflow:hidden;touch-action:none;user-select:none;
+}
+a{color:var(--hot);text-decoration:none}
+header{width:100%;display:flex;align-items:center;gap:8px;padding:8px 12px;flex:0 0 auto}
+header h1{font-size:15px;letter-spacing:3px;text-transform:uppercase;color:var(--hot);
+  text-shadow:0 0 16px rgba(255,79,154,.5)}
+header .sp{flex:1}
+.btn{background:#1b1a40;border:1px solid var(--line);color:var(--text);border-radius:10px;
+  padding:7px 11px;font-size:13px;cursor:pointer;font-family:inherit}
+.btn:active{background:#292763}
+
+#stats{display:flex;gap:20px;align-items:baseline;font-size:12px;color:var(--dim);
+  letter-spacing:1px;text-transform:uppercase;padding-bottom:8px;flex:0 0 auto}
+#stats b{font-size:22px;color:var(--text);letter-spacing:0}
+#combo{color:var(--hot);font-weight:bold;opacity:0;transition:opacity .25s}
+#combo.show{opacity:1}
+
+#board{
+  display:grid;gap:4px;background:var(--panel);border:1px solid var(--line);
+  border-radius:16px;padding:10px;flex:0 0 auto;
+  box-shadow:0 18px 50px rgba(0,0,0,.5), inset 0 0 40px rgba(0,0,0,.35);
+}
+.cell{
+  background:var(--hole);border-radius:7px;position:relative;
+  transition:background .12s ease, transform .12s ease;
+}
+.cell.on{box-shadow:inset 0 -3px 0 rgba(0,0,0,.28), inset 0 2px 0 rgba(255,255,255,.28)}
+.cell.hint{background:#2b2a63;outline:2px dashed rgba(255,255,255,.22);outline-offset:-3px}
+.cell.no{outline:2px solid var(--bad);outline-offset:-3px}
+.cell.pop{animation:pop .28s ease}
+@keyframes pop{0%{transform:scale(1)}45%{transform:scale(1.28);filter:brightness(1.8)}100%{transform:scale(1)}}
+@media (prefers-reduced-motion:reduce){.cell.pop{animation:none}}
+
+#tray{
+  display:flex;gap:14px;align-items:center;justify-content:center;
+  padding:16px 10px 20px;flex:0 0 auto;min-height:120px;width:100%;
+}
+.piece{
+  display:grid;gap:3px;padding:8px;border-radius:12px;cursor:grab;
+  transition:transform .12s ease,opacity .2s ease;
+}
+.piece.held{opacity:.25}
+.piece.used{opacity:0;pointer-events:none}
+.piece .pc{border-radius:5px}
+.piece .pc.off{background:transparent}
+#drag{position:fixed;pointer-events:none;display:none;z-index:30;filter:drop-shadow(0 8px 14px rgba(0,0,0,.5))}
+#drag .pc{border-radius:6px}
+
+#hint{font-size:12px;color:var(--dim);padding-bottom:10px;text-align:center;flex:0 0 auto}
+
+#over{position:fixed;inset:0;background:rgba(10,10,29,.94);display:none;flex-direction:column;
+  align-items:center;justify-content:center;gap:14px;text-align:center;padding:24px;z-index:40}
+#over h2{font-size:30px;color:var(--hot)}
+#over p{color:var(--dim);font-size:14px;line-height:1.6}
+#over .big{background:var(--hot);color:#20061a;border:none;font-weight:bold;padding:14px 28px;
+  font-size:16px;border-radius:12px;font-family:inherit;cursor:pointer}
+
+.btn.muted,button.muted{opacity:.45;text-decoration:line-through}
+</style>
+</head>
+<body>
+
+<header>
+  <a class="btn" href="../index.html">&#8592; Arcade</a>
+  <h1>Block Blast</h1>
+  <span class="sp"></span>
+  <button class="btn" id="sndBtn" title="Sound on/off">&#9834; ON</button>
+  <button class="btn" id="newBtn">New</button>
+</header>
+
+<div id="stats">
+  <span>Score <b id="score">0</b></span>
+  <span>Best <b id="best">0</b></span>
+  <span id="combo">COMBO x1</span>
+</div>
+
+<div id="board"></div>
+<div id="tray"></div>
+<div id="hint">Drag a shape onto the board &mdash; or tap it, then tap where it goes</div>
+<div id="drag"></div>
+
+<div id="over">
+  <h2>No room left</h2>
+  <p id="overText"></p>
+  <button class="big" id="overBtn">Play again</button>
+</div>
+
+<script>
+/* ============================================================
+   SOUND  -  every noise in this arcade is made by maths, not
+   by audio files. That's why the whole game is one small file.
+   Tap the music note in the top bar to turn sound off.
+   ============================================================ */
+const SFX = (function(){
+  let ctx = null, on = true;
+  try { on = localStorage.getItem('arcade_sound') !== 'off'; } catch(e){}
+
+  function ac(){
+    if(!ctx){
+      try { ctx = new (window.AudioContext || window.webkitAudioContext)(); }
+      catch(e){ return null; }
+    }
+    if(ctx.state === 'suspended') ctx.resume();
+    return ctx;
+  }
+
+  // one beep: f = start pitch, f2 = pitch to slide to, d = seconds
+  function tone(o){
+    if(!on) return;
+    const c = ac(); if(!c) return;
+    const t0 = c.currentTime + (o.delay || 0);
+    const osc = c.createOscillator(), g = c.createGain();
+    osc.type = o.type || 'square';
+    osc.frequency.setValueAtTime(o.f, t0);
+    if(o.f2) osc.frequency.exponentialRampToValueAtTime(Math.max(20, o.f2), t0 + o.d);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(o.v || 0.14, t0 + 0.006);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + o.d);
+    osc.connect(g); g.connect(c.destination);
+    osc.start(t0); osc.stop(t0 + o.d + 0.03);
+  }
+
+  // static-ish burst, good for thuds, kicks and explosions
+  function noise(o){
+    if(!on) return;
+    const c = ac(); if(!c) return;
+    const t0 = c.currentTime + (o.delay || 0);
+    const len = Math.floor(c.sampleRate * o.d);
+    const buf = c.createBuffer(1, len, c.sampleRate);
+    const data = buf.getChannelData(0);
+    for(let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = c.createBufferSource(); src.buffer = buf;
+    const flt = c.createBiquadFilter();
+    flt.type = o.hp ? 'highpass' : 'lowpass';
+    flt.frequency.setValueAtTime(o.cut || 1200, t0);
+    const g = c.createGain();
+    g.gain.setValueAtTime(o.v || 0.14, t0);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + o.d);
+    src.connect(flt); flt.connect(g); g.connect(c.destination);
+    src.start(t0);
+  }
+
+  // a little run of notes
+  function seq(notes, type, step, d, v){
+    notes.forEach((f, i) => tone({ f, d: d || 0.10, type: type || 'triangle', delay: i * (step || 0.07), v: v || 0.13 }));
+  }
+
+  const LIB = {
+    click:  () => tone({ f:660, d:.04, v:.10 }),
+    move:   () => tone({ f:300, d:.03, v:.06 }),
+    rotate: () => tone({ f:460, f2:600, d:.05, v:.09 }),
+    lock:   () => tone({ f:150, d:.06, type:'triangle', v:.12 }),
+    drop:   () => { tone({ f:260, f2:70, d:.12, type:'sawtooth', v:.12 }); noise({ d:.06, cut:900, v:.10 }); },
+    hold:   () => tone({ f:520, f2:400, d:.07, type:'triangle' }),
+
+    // line clears get brighter the more lines you take at once
+    clear1: () => seq([523, 784], 'triangle', .06, .10),
+    clear2: () => seq([523, 659, 880], 'triangle', .055, .10),
+    clear3: () => seq([523, 659, 880, 1047], 'triangle', .05, .10),
+    clear4: () => seq([523, 659, 880, 1047, 1319], 'square', .05, .12, .15),
+
+    bomb:   () => { noise({ d:.42, cut:700, v:.24 }); tone({ f:180, f2:35, d:.42, type:'sawtooth', v:.18 }); },
+    eat:    () => tone({ f:520, f2:820, d:.08, type:'square', v:.12 }),
+    gold:   () => seq([784, 988, 1319], 'square', .055, .09, .13),
+    die:    () => { tone({ f:320, f2:60, d:.55, type:'sawtooth', v:.16 }); noise({ d:.3, cut:500, v:.12, delay:.05 }); },
+
+    place:  () => tone({ f:340, f2:420, d:.05, type:'triangle', v:.10 }),
+    bad:    () => { tone({ f:200, d:.10, type:'square', v:.12 }); tone({ f:150, d:.14, type:'square', v:.12, delay:.09 }); },
+    hint:   () => seq([880, 1175], 'sine', .06, .09, .12),
+
+    kick:   () => { noise({ d:.05, cut:2200, hp:true, v:.16 }); tone({ f:190, f2:110, d:.07, type:'triangle', v:.14 }); },
+    dash:   () => tone({ f:200, f2:900, d:.18, type:'sawtooth', v:.13 }),
+    bounce: () => tone({ f:420, d:.03, v:.07 }),
+    goal:   () => seq([659, 784, 1047], 'square', .09, .14, .15),
+    shoot:  () => tone({ f:300, f2:720, d:.06, type:'square', v:.10 }),
+    pop:    () => tone({ f:700, f2:1300, d:.07, type:'sine', v:.14 }),
+    fall:   () => tone({ f:600, f2:180, d:.20, type:'sine', v:.10 }),
+    combo:  () => seq([880, 1175, 1568], 'sine', .05, .08, .13),
+
+    win:    () => seq([523, 659, 784, 1047, 1319], 'square', .10, .16, .15),
+    lose:   () => seq([392, 330, 262], 'sawtooth', .13, .22, .13),
+    start:  () => seq([523, 784], 'square', .07, .09, .11)
+  };
+
+  // pitch-shifted pop, so a long chain of pops climbs the scale
+  function popAt(n){
+    if(!on) return;
+    const base = 620 * Math.pow(1.09, Math.min(n, 14));
+    tone({ f: base, f2: base * 1.9, d:.07, type:'sine', v:.14 });
+  }
+
+  const api = {
+    play(name){ const f = LIB[name]; if(f) f(); },
+    popAt,
+    get on(){ return on; },
+    unlock(){ ac(); },
+    toggle(){
+      on = !on;
+      try { localStorage.setItem('arcade_sound', on ? 'on' : 'off'); } catch(e){}
+      if(on) LIB.click();
+      return on;
+    }
+  };
+
+  // browsers only allow sound after the player touches something
+  const wake = () => api.unlock();
+  window.addEventListener('pointerdown', wake, { once:false });
+  window.addEventListener('keydown', wake, { once:false });
+
+  // hook up the toggle button in the top bar, if this page has one
+  function mount(){
+    const btn = document.getElementById('sndBtn');
+    if(!btn) return;
+    const paint = () => {
+      btn.textContent = on ? '♪ ON' : '♪ OFF';
+      btn.classList.toggle('muted', !on);
+      btn.setAttribute('aria-label', on ? 'Sound is on' : 'Sound is off');
+    };
+    btn.addEventListener('click', () => { api.unlock(); api.toggle(); paint(); });
+    paint();
+  }
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount);
+  else mount();
+
+  return api;
+})();
+
+/* ============================================================
+   BLOCK BLAST
+   Drop shapes onto the board. Fill a whole row or a whole
+   column and it blasts. There is no gravity and nothing falls -
+   the only pressure is running out of room.
+   ============================================================ */
+
+/* ---------- TWEAK ME ---------- */
+const N = 8;              // board is N x N
+const TRAY = 3;           // how many shapes you get at a time
+const LINE_POINTS = 10;   // points per cleared line (squared for multi-clears)
+const COLORS = ['#ff4f9a','#ffb020','#54e6a0','#4ea8ff','#b06bff','#ff6b5c','#3fd6d6'];
+
+// Every shape the game can deal you. 1 = a block, 0 = a gap.
+const SHAPES = [
+  [[1]],
+  [[1,1]],            [[1],[1]],
+  [[1,1,1]],          [[1],[1],[1]],
+  [[1,1,1,1]],        [[1],[1],[1],[1]],
+  [[1,1,1,1,1]],      [[1],[1],[1],[1],[1]],
+  [[1,1],[1,1]],
+  [[1,1,1],[1,1,1],[1,1,1]],
+  [[1,0],[1,0],[1,1]], [[0,1],[0,1],[1,1]], [[1,1],[1,0],[1,0]], [[1,1],[0,1],[0,1]],
+  [[1,0,0],[1,1,1]],   [[0,0,1],[1,1,1]],   [[1,1,1],[1,0,0]],   [[1,1,1],[0,0,1]],
+  [[1,1],[1,0]],       [[1,1],[0,1]],       [[1,0],[1,1]],       [[0,1],[1,1]],
+  [[0,1,1],[1,1,0]],   [[1,1,0],[0,1,1]],
+  [[1,0],[1,1],[0,1]], [[0,1],[1,1],[1,0]],
+  [[0,1,0],[1,1,1]]
+];
+/* ------------------------------ */
+
+const boardEl = document.getElementById('board');
+const trayEl  = document.getElementById('tray');
+const dragEl  = document.getElementById('drag');
+
+let grid, tray, score, best, combo, cellSize;
+
+const store = {
+  get(k, d){ try{ const v = localStorage.getItem(k); return v === null ? d : v; }catch(e){ return d; } },
+  set(k, v){ try{ localStorage.setItem(k, v); }catch(e){} }
+};
+best = parseInt(store.get('blast_best','0'), 10) || 0;
+
+/* ---------- board ---------- */
+function buildBoard(){
+  boardEl.style.gridTemplateColumns = 'repeat(' + N + ', 1fr)';
+  boardEl.innerHTML = '';
+  for(let r = 0; r < N; r++) for(let c = 0; c < N; c++){
+    const d = document.createElement('div');
+    d.className = 'cell'; d.dataset.r = r; d.dataset.c = c;
+    boardEl.appendChild(d);
+  }
+}
+const cellEl = (r, c) => boardEl.children[r * N + c];
+
+function paint(){
+  for(let r = 0; r < N; r++) for(let c = 0; c < N; c++){
+    const el = cellEl(r, c), v = grid[r][c];
+    el.classList.remove('hint','no');
+    el.classList.toggle('on', !!v);
+    el.style.background = v ? v : '';
+  }
+  document.getElementById('score').textContent = score;
+  document.getElementById('best').textContent = best;
+}
+
+/* ---------- pieces ---------- */
+function randomShape(){
+  const s = SHAPES[Math.floor(Math.random() * SHAPES.length)];
+  return { cells: s.map(r => r.slice()), color: COLORS[Math.floor(Math.random() * COLORS.length)] };
+}
+
+function deal(){
+  tray = [];
+  for(let i = 0; i < TRAY; i++) tray.push(randomShape());
+  renderTray();
+}
+
+function pieceMarkup(p, size, gap){
+  const g = document.createElement('div');
+  g.style.display = 'grid';
+  g.style.gap = gap + 'px';
+  g.style.gridTemplateColumns = 'repeat(' + p.cells[0].length + ', ' + size + 'px)';
+  for(const row of p.cells) for(const v of row){
+    const d = document.createElement('div');
+    d.className = 'pc' + (v ? '' : ' off');
+    d.style.width = d.style.height = size + 'px';
+    if(v){
+      d.style.background = p.color;
+      d.style.boxShadow = 'inset 0 -3px 0 rgba(0,0,0,.28), inset 0 2px 0 rgba(255,255,255,.28)';
+    }
+    g.appendChild(d);
+  }
+  return g;
+}
+
+function renderTray(){
+  trayEl.innerHTML = '';
+  tray.forEach((p, i) => {
+    const holder = document.createElement('div');
+    holder.className = 'piece';
+    holder.dataset.i = i;
+    if(!p){ holder.classList.add('used'); trayEl.appendChild(holder); return; }
+    holder.appendChild(pieceMarkup(p, Math.max(14, Math.round(cellSize * 0.62)), 3));
+    trayEl.appendChild(holder);
+  });
+}
+
+/* ---------- rules ---------- */
+function fits(p, r0, c0){
+  const cells = p.cells;
+  for(let r = 0; r < cells.length; r++)
+    for(let c = 0; c < cells[r].length; c++){
+      if(!cells[r][c]) continue;
+      const R = r0 + r, C = c0 + c;
+      if(R < 0 || C < 0 || R >= N || C >= N) return false;
+      if(grid[R][C]) return false;
+    }
+  return true;
+}
+
+function anyFits(p){
+  for(let r = 0; r < N; r++) for(let c = 0; c < N; c++) if(fits(p, r, c)) return true;
+  return false;
+}
+
+function place(p, r0, c0){
+  let placed = 0;
+  for(let r = 0; r < p.cells.length; r++)
+    for(let c = 0; c < p.cells[r].length; c++)
+      if(p.cells[r][c]){ grid[r0+r][c0+c] = p.color; placed++; }
+  score += placed;
+  SFX.play('place');
+  clearLines();
+  paint();
+}
+
+function clearLines(){
+  const rows = [], cols = [];
+  for(let r = 0; r < N; r++) if(grid[r].every(v => v)) rows.push(r);
+  for(let c = 0; c < N; c++){
+    let full = true;
+    for(let r = 0; r < N; r++) if(!grid[r][c]){ full = false; break; }
+    if(full) cols.push(c);
+  }
+  const total = rows.length + cols.length;
+  if(!total){ combo = 0; showCombo(); return; }
+
+  const hit = [];
+  rows.forEach(r => { for(let c = 0; c < N; c++) hit.push([r,c]); });
+  cols.forEach(c => { for(let r = 0; r < N; r++) hit.push([r,c]); });
+
+  combo++;
+  const gained = LINE_POINTS * total * total * Math.max(1, combo);
+  score += gained;
+
+  hit.forEach(([r,c], i) => {
+    const el = cellEl(r,c);
+    el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop');
+    grid[r][c] = null;
+    if(i % 3 === 0) SFX.popAt(i / 3);
+  });
+  if(combo > 1) SFX.play('combo');
+  showCombo();
+  if(score > best){ best = score; store.set('blast_best', best); }
+}
+
+function showCombo(){
+  const el = document.getElementById('combo');
+  if(combo > 1){ el.textContent = 'COMBO x' + combo; el.classList.add('show'); }
+  else el.classList.remove('show');
+}
+
+function afterMove(){
+  if(tray.every(p => !p)) deal();
+  renderTray();
+  const live = tray.filter(Boolean);
+  if(live.length && !live.some(anyFits)) gameOver();
+}
+
+function gameOver(){
+  if(score > best){ best = score; store.set('blast_best', best); }
+  SFX.play('lose');
+  document.getElementById('overText').textContent =
+    'None of your shapes fit. Score ' + score + '. Best ' + best + '.';
+  document.getElementById('over').style.display = 'flex';
+}
+
+/* ---------- dragging ---------- */
+let held = null;        // { piece, index, grabR, grabC }
+let hoverOrigin = null; // [r, c] where the piece would land
+
+function cellUnder(x, y){
+  const rect = boardEl.getBoundingClientRect();
+  const pad = 10, gap = 4;
+  const step = cellSize + gap;
+  const c = Math.floor((x - rect.left - pad) / step);
+  const r = Math.floor((y - rect.top  - pad) / step);
+  if(r < -2 || c < -2 || r > N + 1 || c > N + 1) return null;
+  return [r, c];
+}
+
+function showDragGhost(p, x, y){
+  dragEl.innerHTML = '';
+  dragEl.appendChild(pieceMarkup(p, cellSize, 4));
+  dragEl.style.display = 'block';
+  moveDragGhost(p, x, y);
+}
+function moveDragGhost(p, x, y){
+  const w = p.cells[0].length * (cellSize + 4);
+  const h = p.cells.length * (cellSize + 4);
+  dragEl.style.left = (x - w / 2) + 'px';
+  dragEl.style.top  = (y - h / 2 - LIFT) + 'px';
+}
+
+// on a touch screen the shape sits above your finger so you can see it
+const LIFT = matchMedia('(pointer:coarse)').matches ? 62 : 0;
+
+function previewAt(x, y){
+  document.querySelectorAll('.cell.hint,.cell.no').forEach(e => e.classList.remove('hint','no'));
+  hoverOrigin = null;
+  if(!held) return;
+  const p = held.piece;
+  const w = p.cells[0].length, h = p.cells.length;
+  const hit = cellUnder(x, y - LIFT);
+  if(!hit) return;
+  // centre the shape on the pointer
+  const r0 = hit[0] - Math.floor(h / 2);
+  const c0 = hit[1] - Math.floor(w / 2);
+  const ok = fits(p, r0, c0);
+  for(let r = 0; r < h; r++) for(let c = 0; c < w; c++){
+    if(!p.cells[r][c]) continue;
+    const R = r0 + r, C = c0 + c;
+    if(R < 0 || C < 0 || R >= N || C >= N) continue;
+    cellEl(R, C).classList.add(ok ? 'hint' : 'no');
+  }
+  if(ok) hoverOrigin = [r0, c0];
+}
+
+function pickUp(i, x, y){
+  const p = tray[i];
+  if(!p) return;
+  held = { piece: p, index: i };
+  document.querySelectorAll('.piece').forEach(e => e.classList.toggle('held', +e.dataset.i === i));
+  showDragGhost(p, x, y);
+  previewAt(x, y);
+  SFX.play('click');
+}
+
+function letGo(){
+  if(!held) return false;
+  let dropped = false;
+  if(hoverOrigin){
+    place(held.piece, hoverOrigin[0], hoverOrigin[1]);
+    tray[held.index] = null;
+    dropped = true;
+  }
+  held = null; hoverOrigin = null;
+  dragEl.style.display = 'none';
+  document.querySelectorAll('.piece').forEach(e => e.classList.remove('held'));
+  document.querySelectorAll('.cell.hint,.cell.no').forEach(e => e.classList.remove('hint','no'));
+  if(dropped) afterMove();
+  return dropped;
+}
+
+trayEl.addEventListener('pointerdown', e => {
+  const holder = e.target.closest('.piece');
+  if(!holder) return;
+  e.preventDefault();
+  pickUp(+holder.dataset.i, e.clientX, e.clientY);
+});
+
+window.addEventListener('pointermove', e => {
+  if(!held) return;
+  e.preventDefault();
+  moveDragGhost(held.piece, e.clientX, e.clientY);
+  previewAt(e.clientX, e.clientY);
+}, { passive:false });
+
+window.addEventListener('pointerup', e => {
+  if(!held) return;
+  // a tap on the tray keeps the shape selected so you can tap the board next
+  const overTray = e.target.closest && e.target.closest('#tray');
+  if(overTray && !hoverOrigin){
+    dragEl.style.display = 'none';
+    return;
+  }
+  letGo();
+});
+
+// tap-to-place: with a shape selected, tap a square on the board
+boardEl.addEventListener('pointerdown', e => {
+  if(!held) return;
+  e.preventDefault();
+  previewAt(e.clientX, e.clientY + LIFT);
+  letGo();
+});
+
+document.getElementById('newBtn').onclick = () => start();
+document.getElementById('overBtn').onclick = () => start();
+
+/* ---------- sizing & start ---------- */
+function fit(){
+  const wide = Math.min(window.innerWidth - 24, 520);
+  const tall = window.innerHeight - 250;
+  const size = Math.min(wide, Math.max(200, tall));
+  cellSize = Math.floor((size - 20 - (N - 1) * 4) / N);
+  cellSize = Math.max(22, Math.min(cellSize, 54));
+  for(const el of boardEl.children){ el.style.width = el.style.height = cellSize + 'px'; }
+  if(tray) renderTray();
+}
+window.addEventListener('resize', fit);
+window.addEventListener('orientationchange', () => setTimeout(fit, 200));
+
+function start(){
+  grid = Array.from({length:N}, () => Array(N).fill(null));
+  score = 0; combo = 0;
+  document.getElementById('over').style.display = 'none';
+  buildBoard();
+  fit();
+  deal();
+  showCombo();
+  paint();
+}
+
+start();
+</script>
+</body>
+</html>

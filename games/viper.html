@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Viper</title>
+<style>
+/* ========== TWEAK ME ========== */
+:root{
+  --bg:#04070d;
+  --grid:rgba(57,230,255,.06);
+  --snake:#3ef58a;      /* Vipers green */
+  --snakeHead:#b6ffd6;
+  --food:#ff7a2f;
+  --gold:#ffd93d;
+  --text:#dff6ff;
+  --dim:#7fa3b5;
+  --line:#173044;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{
+  background:radial-gradient(900px 600px at 50% 0%,#0b2033 0%,var(--bg) 65%);
+  color:var(--text);font-family:'Trebuchet MS',system-ui,sans-serif;
+  display:flex;flex-direction:column;align-items:center;overflow:hidden;touch-action:none;
+}
+a{color:#39e6ff;text-decoration:none}
+header{width:100%;display:flex;align-items:center;gap:10px;padding:8px 12px;flex:0 0 auto}
+header h1{font-size:16px;letter-spacing:5px;text-transform:uppercase;color:var(--snake);
+  text-shadow:0 0 14px rgba(62,245,138,.6)}
+header .sp{flex:1}
+.btn{background:#0d1e2b;border:1px solid var(--line);color:var(--text);border-radius:10px;
+  padding:7px 12px;font-size:13px;cursor:pointer;font-family:inherit}
+.btn:active{background:#16344a}
+#stats{display:flex;gap:16px;font-size:13px;color:var(--dim);padding-bottom:6px}
+#stats b{color:var(--text);font-size:17px}
+#stage{flex:1;display:flex;align-items:center;justify-content:center;min-height:0;width:100%;padding:0 10px}
+canvas{border:2px solid var(--line);border-radius:14px;background:#050c14;
+  box-shadow:0 0 44px rgba(62,245,138,.14),inset 0 0 60px rgba(0,0,0,.7);max-width:100%;max-height:100%}
+#pad{display:none;grid-template-columns:repeat(3,64px);grid-template-rows:repeat(2,58px);
+  gap:8px;padding:12px 0 18px;justify-content:center;flex:0 0 auto}
+#pad button{background:#0d1e2b;border:1px solid var(--line);color:var(--text);
+  border-radius:14px;font-size:20px;font-family:inherit}
+#pad button:active{background:var(--snake);color:#03130a}
+#pad .blank{visibility:hidden}
+@media (max-width:900px){ #pad{display:grid} }
+#over{position:fixed;inset:0;background:rgba(4,7,13,.93);display:none;flex-direction:column;
+  align-items:center;justify-content:center;gap:14px;text-align:center;padding:24px;z-index:5}
+#over h2{font-size:30px;color:var(--snake)}
+#over p{color:var(--dim);font-size:14px;line-height:1.6;max-width:320px}
+#over .big{background:var(--snake);color:#03130a;border:none;font-weight:bold;padding:14px 26px;
+  font-size:16px;border-radius:12px;font-family:inherit;cursor:pointer}
+select.btn{padding:7px 6px}
+
+.btn.muted,button.muted{opacity:.45;text-decoration:line-through}
+</style>
+</head>
+<body>
+
+<header>
+  <a class="btn" href="../index.html">&#8592; Arcade</a>
+  <h1>Viper</h1>
+  <span class="sp"></span>
+  <select class="btn" id="speedSel">
+    <option value="150">Chill</option>
+    <option value="110" selected>Normal</option>
+    <option value="80">Fast</option>
+    <option value="55">Venom</option>
+  </select>
+  <button class="btn" id="sndBtn" title="Sound on/off">&#9834; ON</button>
+  <button class="btn" id="pauseBtn">Pause</button>
+</header>
+
+<div id="stats">
+  <span>Score <b id="score">0</b></span>
+  <span>Best <b id="best">0</b></span>
+  <span>Length <b id="len">3</b></span>
+</div>
+
+<div id="stage"><canvas id="cv"></canvas></div>
+
+<div id="pad">
+  <button class="blank"></button><button id="bUp">&#9650;</button><button class="blank"></button>
+  <button id="bLeft">&#9664;</button><button id="bDown">&#9660;</button><button id="bRight">&#9654;</button>
+</div>
+
+<div id="over">
+  <h2 id="overTitle">Bitten!</h2>
+  <p id="overText"></p>
+  <button class="big" id="overBtn">Again</button>
+</div>
+
+<script>
+/* ============================================================
+   SOUND  -  every noise in this arcade is made by maths, not
+   by audio files. That's why the whole game is one small file.
+   Tap the music note in the top bar to turn sound off.
+   ============================================================ */
+const SFX = (function(){
+  let ctx = null, on = true;
+  try { on = localStorage.getItem('arcade_sound') !== 'off'; } catch(e){}
+
+  function ac(){
+    if(!ctx){
+      try { ctx = new (window.AudioContext || window.webkitAudioContext)(); }
+      catch(e){ return null; }
+    }
+    if(ctx.state === 'suspended') ctx.resume();
+    return ctx;
+  }
+
+  // one beep: f = start pitch, f2 = pitch to slide to, d = seconds
+  function tone(o){
+    if(!on) return;
+    const c = ac(); if(!c) return;
+    const t0 = c.currentTime + (o.delay || 0);
+    const osc = c.createOscillator(), g = c.createGain();
+    osc.type = o.type || 'square';
+    osc.frequency.setValueAtTime(o.f, t0);
+    if(o.f2) osc.frequency.exponentialRampToValueAtTime(Math.max(20, o.f2), t0 + o.d);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(o.v || 0.14, t0 + 0.006);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + o.d);
+    osc.connect(g); g.connect(c.destination);
+    osc.start(t0); osc.stop(t0 + o.d + 0.03);
+  }
+
+  // static-ish burst, good for thuds, kicks and explosions
+  function noise(o){
+    if(!on) return;
+    const c = ac(); if(!c) return;
+    const t0 = c.currentTime + (o.delay || 0);
+    const len = Math.floor(c.sampleRate * o.d);
+    const buf = c.createBuffer(1, len, c.sampleRate);
+    const data = buf.getChannelData(0);
+    for(let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = c.createBufferSource(); src.buffer = buf;
+    const flt = c.createBiquadFilter();
+    flt.type = o.hp ? 'highpass' : 'lowpass';
+    flt.frequency.setValueAtTime(o.cut || 1200, t0);
+    const g = c.createGain();
+    g.gain.setValueAtTime(o.v || 0.14, t0);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + o.d);
+    src.connect(flt); flt.connect(g); g.connect(c.destination);
+    src.start(t0);
+  }
+
+  // a little run of notes
+  function seq(notes, type, step, d, v){
+    notes.forEach((f, i) => tone({ f, d: d || 0.10, type: type || 'triangle', delay: i * (step || 0.07), v: v || 0.13 }));
+  }
+
+  const LIB = {
+    click:  () => tone({ f:660, d:.04, v:.10 }),
+    move:   () => tone({ f:300, d:.03, v:.06 }),
+    rotate: () => tone({ f:460, f2:600, d:.05, v:.09 }),
+    lock:   () => tone({ f:150, d:.06, type:'triangle', v:.12 }),
+    drop:   () => { tone({ f:260, f2:70, d:.12, type:'sawtooth', v:.12 }); noise({ d:.06, cut:900, v:.10 }); },
+    hold:   () => tone({ f:520, f2:400, d:.07, type:'triangle' }),
+
+    // line clears get brighter the more lines you take at once
+    clear1: () => seq([523, 784], 'triangle', .06, .10),
+    clear2: () => seq([523, 659, 880], 'triangle', .055, .10),
+    clear3: () => seq([523, 659, 880, 1047], 'triangle', .05, .10),
+    clear4: () => seq([523, 659, 880, 1047, 1319], 'square', .05, .12, .15),
+
+    bomb:   () => { noise({ d:.42, cut:700, v:.24 }); tone({ f:180, f2:35, d:.42, type:'sawtooth', v:.18 }); },
+    eat:    () => tone({ f:520, f2:820, d:.08, type:'square', v:.12 }),
+    gold:   () => seq([784, 988, 1319], 'square', .055, .09, .13),
+    die:    () => { tone({ f:320, f2:60, d:.55, type:'sawtooth', v:.16 }); noise({ d:.3, cut:500, v:.12, delay:.05 }); },
+
+    place:  () => tone({ f:340, f2:420, d:.05, type:'triangle', v:.10 }),
+    bad:    () => { tone({ f:200, d:.10, type:'square', v:.12 }); tone({ f:150, d:.14, type:'square', v:.12, delay:.09 }); },
+    hint:   () => seq([880, 1175], 'sine', .06, .09, .12),
+
+    kick:   () => { noise({ d:.05, cut:2200, hp:true, v:.16 }); tone({ f:190, f2:110, d:.07, type:'triangle', v:.14 }); },
+    dash:   () => tone({ f:200, f2:900, d:.18, type:'sawtooth', v:.13 }),
+    bounce: () => tone({ f:420, d:.03, v:.07 }),
+    goal:   () => seq([659, 784, 1047], 'square', .09, .14, .15),
+    shoot:  () => tone({ f:300, f2:720, d:.06, type:'square', v:.10 }),
+    pop:    () => tone({ f:700, f2:1300, d:.07, type:'sine', v:.14 }),
+    fall:   () => tone({ f:600, f2:180, d:.20, type:'sine', v:.10 }),
+    combo:  () => seq([880, 1175, 1568], 'sine', .05, .08, .13),
+
+    win:    () => seq([523, 659, 784, 1047, 1319], 'square', .10, .16, .15),
+    lose:   () => seq([392, 330, 262], 'sawtooth', .13, .22, .13),
+    start:  () => seq([523, 784], 'square', .07, .09, .11)
+  };
+
+  // pitch-shifted pop, so a long chain of pops climbs the scale
+  function popAt(n){
+    if(!on) return;
+    const base = 620 * Math.pow(1.09, Math.min(n, 14));
+    tone({ f: base, f2: base * 1.9, d:.07, type:'sine', v:.14 });
+  }
+
+  const api = {
+    play(name){ const f = LIB[name]; if(f) f(); },
+    popAt,
+    get on(){ return on; },
+    unlock(){ ac(); },
+    toggle(){
+      on = !on;
+      try { localStorage.setItem('arcade_sound', on ? 'on' : 'off'); } catch(e){}
+      if(on) LIB.click();
+      return on;
+    }
+  };
+
+  // browsers only allow sound after the player touches something
+  const wake = () => api.unlock();
+  window.addEventListener('pointerdown', wake, { once:false });
+  window.addEventListener('keydown', wake, { once:false });
+
+  // hook up the toggle button in the top bar, if this page has one
+  function mount(){
+    const btn = document.getElementById('sndBtn');
+    if(!btn) return;
+    const paint = () => {
+      btn.textContent = on ? '♪ ON' : '♪ OFF';
+      btn.classList.toggle('muted', !on);
+      btn.setAttribute('aria-label', on ? 'Sound is on' : 'Sound is off');
+    };
+    btn.addEventListener('click', () => { api.unlock(); api.toggle(); paint(); });
+    paint();
+  }
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount);
+  else mount();
+
+  return api;
+})();
+
+/* ============================================================
+   VIPER  -  snake, but the golden ball is worth triple and
+   disappears if you're too slow. Named after the OUFC Vipers.
+   ============================================================ */
+
+/* ---------- TWEAK ME ---------- */
+const GRID = 20;          // squares across and down
+const GOLD_CHANCE = 0.22; // how often a golden ball shows up
+const GOLD_LIFE = 5000;   // ms before the golden ball vanishes
+const GROW = 1;           // segments gained per normal ball
+/* ------------------------------ */
+
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+let CELL = 20;
+
+let snake, dir, queue, food, gold, goldAt, score, best = 0, alive, paused, acc, last, speed;
+let waiting = true;   // sit still until the player makes the first move
+
+// tiny safe store - works when the browser allows it, shrugs when it doesn't
+const store = {
+  get(k, d){ try{ const v = localStorage.getItem(k); return v === null ? d : v; }catch(e){ return d; } },
+  set(k, v){ try{ localStorage.setItem(k, v); }catch(e){} }
+};
+best = parseInt(store.get('viper_best', '0'), 10) || 0;
+document.getElementById('best').textContent = best;
+
+function randCell(){
+  while(true){
+    const p = { x: Math.floor(Math.random()*GRID), y: Math.floor(Math.random()*GRID) };
+    if(!snake.some(s => s.x === p.x && s.y === p.y) &&
+       !(gold && gold.x === p.x && gold.y === p.y)) return p;
+  }
+}
+
+function start(){
+  snake = [{x:8,y:10},{x:7,y:10},{x:6,y:10}];
+  dir = {x:1,y:0};
+  queue = [];
+  gold = null; goldAt = 0;
+  score = 0; alive = true; paused = false; waiting = true;
+  acc = 0; last = 0;
+  speed = parseInt(document.getElementById('speedSel').value, 10);
+  food = randCell();
+  document.getElementById('over').style.display = 'none';
+  document.getElementById('pauseBtn').textContent = 'Pause';
+  updateStats();
+  requestAnimationFrame(loop);
+}
+
+function updateStats(){
+  document.getElementById('score').textContent = score;
+  document.getElementById('len').textContent = snake.length;
+  document.getElementById('best').textContent = best;
+}
+
+function turn(nx, ny){
+  waiting = false;
+  const lastDir = queue.length ? queue[queue.length-1] : dir;
+  if(lastDir.x === -nx && lastDir.y === -ny) return;   // no instant U-turn
+  if(lastDir.x === nx && lastDir.y === ny) return;
+  if(queue.length < 2) queue.push({x:nx, y:ny});
+}
+
+function step(){
+  if(queue.length) dir = queue.shift();
+  const head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y };
+
+  if(head.x < 0 || head.y < 0 || head.x >= GRID || head.y >= GRID) return die('You hit the wall.');
+  if(snake.some((s,i) => i < snake.length - 1 && s.x === head.x && s.y === head.y))
+    return die('You bit your own tail.');
+
+  snake.unshift(head);
+
+  let grew = 0;
+  if(head.x === food.x && head.y === food.y){
+    score += 10; grew = GROW; SFX.play('eat');
+    food = randCell();
+    if(!gold && Math.random() < GOLD_CHANCE){ gold = randCell(); goldAt = performance.now(); }
+  }
+  if(gold && head.x === gold.x && head.y === gold.y){
+    score += 30; grew += 2; gold = null; SFX.play('gold');
+  }
+  // the head is already added, so growing by 1 just means "don't drop the tail"
+  if(grew > 0){ for(let i = 1; i < grew; i++) snake.push({ ...snake[snake.length-1] }); }
+  else snake.pop();
+
+  if(gold && performance.now() - goldAt > GOLD_LIFE) gold = null;
+  updateStats();
+}
+
+function die(why){
+  alive = false;
+  SFX.play('die');
+  if(score > best){ best = score; store.set('viper_best', best); }
+  document.getElementById('overTitle').textContent = score >= best && score > 0 ? 'New best!' : 'Bitten!';
+  document.getElementById('overText').textContent = why + '  Score ' + score + ', length ' + snake.length + '. Best ' + best + '.';
+  document.getElementById('over').style.display = 'flex';
+  updateStats();
+}
+
+function draw(){
+  ctx.clearRect(0,0,cv.width,cv.height);
+  ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--grid');
+  ctx.lineWidth = 1;
+  for(let i = 1; i < GRID; i++){
+    ctx.beginPath(); ctx.moveTo(i*CELL,0); ctx.lineTo(i*CELL,cv.height); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0,i*CELL); ctx.lineTo(cv.width,i*CELL); ctx.stroke();
+  }
+
+  const ball = (p, col, r) => {
+    ctx.fillStyle = col; ctx.shadowColor = col; ctx.shadowBlur = CELL * 0.9;
+    ctx.beginPath();
+    ctx.arc(p.x*CELL + CELL/2, p.y*CELL + CELL/2, r, 0, Math.PI*2);
+    ctx.fill(); ctx.shadowBlur = 0;
+  };
+
+  ball(food, '#ff7a2f', CELL * 0.32);
+  if(gold){
+    const left = 1 - (performance.now() - goldAt) / GOLD_LIFE;
+    ctx.globalAlpha = 0.45 + 0.55 * Math.abs(Math.sin(performance.now()/140));
+    ball(gold, '#ffd93d', CELL * (0.24 + 0.16 * Math.max(0, left)));
+    ctx.globalAlpha = 1;
+  }
+
+  for(let i = snake.length - 1; i >= 0; i--){
+    const s = snake[i];
+    const head = i === 0;
+    ctx.fillStyle = head ? '#b6ffd6' : '#3ef58a';
+    ctx.globalAlpha = head ? 1 : 0.35 + 0.65 * (1 - i / snake.length);
+    ctx.shadowColor = '#3ef58a'; ctx.shadowBlur = head ? CELL : CELL * 0.5;
+    const pad = head ? 1 : 2;
+    const r = CELL * 0.3;
+    const x = s.x*CELL + pad, y = s.y*CELL + pad, w = CELL - pad*2;
+    ctx.beginPath();
+    ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+w,r); ctx.arcTo(x+w,y+w,x,y+w,r);
+    ctx.arcTo(x,y+w,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); ctx.fill();
+    ctx.shadowBlur = 0; ctx.globalAlpha = 1;
+    if(head){
+      ctx.fillStyle = '#04070d';
+      const ex = dir.y !== 0 ? 0.28 : 0.5, ey = dir.x !== 0 ? 0.28 : 0.5;
+      ctx.beginPath(); ctx.arc(s.x*CELL + CELL*ex, s.y*CELL + CELL*ey, CELL*0.08, 0, 7); ctx.fill();
+      ctx.beginPath(); ctx.arc(s.x*CELL + CELL*(1-ex), s.y*CELL + CELL*(1-ey), CELL*0.08, 0, 7); ctx.fill();
+    }
+  }
+}
+
+function loop(t){
+  if(!last) last = t;
+  const dt = t - last; last = t;
+  if(alive && !paused && !waiting){
+    acc += dt;
+    while(acc >= speed){ acc -= speed; if(alive) step(); }
+    draw();
+  } else if(alive && waiting){
+    draw();
+    ctx.fillStyle = 'rgba(4,7,13,.55)'; ctx.fillRect(0,0,cv.width,cv.height);
+    ctx.fillStyle = '#3ef58a'; ctx.textAlign = 'center';
+    ctx.font = 'bold ' + Math.max(14, Math.round(cv.width/22)) + 'px Trebuchet MS';
+    ctx.fillText('SWIPE OR PRESS AN ARROW', cv.width/2, cv.height/2 - 6);
+    ctx.fillStyle = '#7fa3b5';
+    ctx.font = Math.max(11, Math.round(cv.width/34)) + 'px Trebuchet MS';
+    ctx.fillText('the gold ball is worth triple', cv.width/2, cv.height/2 + 22);
+  }
+  if(alive) requestAnimationFrame(loop);
+}
+
+/* ---------- controls ---------- */
+const keys = {
+  ArrowUp:[0,-1], KeyW:[0,-1],
+  ArrowDown:[0,1], KeyS:[0,1],
+  ArrowLeft:[-1,0], KeyA:[-1,0],
+  ArrowRight:[1,0], KeyD:[1,0]
+};
+document.addEventListener('keydown', e => {
+  if(e.code === 'KeyP' || e.code === 'Escape'){ togglePause(); return; }
+  const k = keys[e.code];
+  if(k){ e.preventDefault(); turn(k[0], k[1]); }
+});
+const tap = (id, x, y) => {
+  const el = document.getElementById(id);
+  const go = e => { e.preventDefault(); turn(x, y); };
+  el.addEventListener('touchstart', go, {passive:false});
+  el.addEventListener('mousedown', go);
+};
+tap('bUp',0,-1); tap('bDown',0,1); tap('bLeft',-1,0); tap('bRight',1,0);
+
+let sx=0, sy=0;
+cv.addEventListener('touchstart', e => { sx = e.touches[0].clientX; sy = e.touches[0].clientY; }, {passive:true});
+cv.addEventListener('touchend', e => {
+  const dx = e.changedTouches[0].clientX - sx, dy = e.changedTouches[0].clientY - sy;
+  if(Math.abs(dx) < 18 && Math.abs(dy) < 18) return;
+  if(Math.abs(dx) > Math.abs(dy)) turn(dx > 0 ? 1 : -1, 0); else turn(0, dy > 0 ? 1 : -1);
+}, {passive:true});
+
+function togglePause(){
+  if(!alive) return;
+  paused = !paused;
+  document.getElementById('pauseBtn').textContent = paused ? 'Resume' : 'Pause';
+  if(paused){
+    ctx.fillStyle = 'rgba(4,7,13,.8)'; ctx.fillRect(0,0,cv.width,cv.height);
+    ctx.fillStyle = '#dff6ff'; ctx.font = 'bold 24px Trebuchet MS'; ctx.textAlign = 'center';
+    ctx.fillText('PAUSED', cv.width/2, cv.height/2);
+  }
+}
+document.getElementById('pauseBtn').onclick = togglePause;
+document.getElementById('overBtn').onclick = start;
+document.getElementById('speedSel').onchange = () => { speed = parseInt(document.getElementById('speedSel').value,10); };
+
+function fit(){
+  const stage = document.getElementById('stage');
+  const size = Math.min(stage.clientWidth - 4, stage.clientHeight - 4, 620);
+  CELL = Math.max(8, Math.floor(size / GRID));
+  cv.width = cv.height = CELL * GRID;
+  if(snake) draw();
+}
+window.addEventListener('resize', fit);
+window.addEventListener('orientationchange', () => setTimeout(fit, 200));
+fit();
+start();
+</script>
+</body>
+</html>

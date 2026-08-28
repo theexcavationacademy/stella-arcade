@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Block Drop</title>
+<style>
+/* ==========================================================
+   TWEAK ME  -  change these and reload to see what happens
+   ========================================================== */
+:root{
+  --bg:#07060f;            /* page background          */
+  --panel:#120f24;         /* side panel background    */
+  --line:#2a2350;          /* border lines             */
+  --text:#e8e4ff;          /* normal text              */
+  --dim:#8f88bd;           /* faded text               */
+  --accent:#ff7a2f;        /* Stella's flame orange    */
+  --accent2:#39e6ff;       /* electric blue            */
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{
+  background:radial-gradient(1200px 700px at 50% -10%,#1b1440 0%,var(--bg) 60%);
+  color:var(--text);font-family:'Trebuchet MS',system-ui,sans-serif;
+  display:flex;flex-direction:column;align-items:center;
+  overflow:hidden;touch-action:manipulation;
+}
+a{color:var(--accent2);text-decoration:none}
+header{width:100%;display:flex;align-items:center;gap:10px;padding:8px 12px;flex:0 0 auto}
+header h1{font-size:16px;letter-spacing:3px;text-transform:uppercase;
+  background:linear-gradient(90deg,var(--accent),#ffd166,var(--accent2));
+  -webkit-background-clip:text;background-clip:text;color:transparent}
+header .sp{flex:1}
+.btn{
+  background:#1c1738;border:1px solid var(--line);color:var(--text);
+  border-radius:10px;padding:7px 12px;font-size:13px;cursor:pointer;
+  font-family:inherit;
+}
+.btn:active{background:#2a2255}
+#wrap{flex:1;display:flex;gap:12px;align-items:center;justify-content:center;width:100%;padding:0 10px;min-height:0}
+canvas{
+  border:2px solid var(--line);border-radius:12px;background:#0b0918;
+  box-shadow:0 0 40px rgba(57,230,255,.12), inset 0 0 60px rgba(0,0,0,.6);
+  max-height:100%;
+}
+#side{display:flex;flex-direction:column;gap:10px;width:118px;flex:0 0 auto}
+.box{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px}
+.box h2{font-size:10px;letter-spacing:2px;color:var(--dim);text-transform:uppercase;margin-bottom:4px}
+.box .v{font-size:20px;font-weight:bold}
+#fireBar{height:8px;background:#241c46;border-radius:6px;overflow:hidden;margin-top:6px}
+#fireFill{height:100%;width:0%;background:linear-gradient(90deg,#ff7a2f,#ffd166);transition:width .2s}
+/* touch pad */
+#pad{display:none;gap:8px;padding:10px 8px 16px;width:100%;max-width:520px;flex:0 0 auto}
+#pad button{
+  flex:1;background:#1c1738;border:1px solid var(--line);color:var(--text);
+  border-radius:14px;padding:16px 0;font-size:19px;font-family:inherit;
+}
+#pad button:active{background:var(--accent);color:#100b02}
+@media (max-width:760px){
+  #pad{display:flex}
+  #wrap{flex-direction:column-reverse;gap:8px}
+  #side{flex-direction:row;width:100%;max-width:520px;gap:8px}
+  .box{flex:1;text-align:center}
+  #nextBox,#holdBox{flex:0 0 74px}
+}
+/* overlay */
+#over{
+  position:fixed;inset:0;background:rgba(7,6,15,.92);display:none;
+  flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;padding:24px;z-index:5;
+}
+#over h2{font-size:30px;color:var(--accent)}
+#over p{color:var(--dim);max-width:340px;line-height:1.5;font-size:14px}
+#over .big{background:var(--accent);color:#150c02;border:none;font-weight:bold;padding:14px 26px;font-size:16px;border-radius:12px;font-family:inherit;cursor:pointer}
+
+.btn.muted,button.muted{opacity:.45;text-decoration:line-through}
+</style>
+</head>
+<body>
+
+<header>
+  <a class="btn" href="../index.html">&#8592; Arcade</a>
+  <h1>Block Drop</h1>
+  <span class="sp"></span>
+  <button class="btn" id="sndBtn" title="Sound on/off">&#9834; ON</button>
+  <button class="btn" id="pauseBtn">Pause</button>
+</header>
+
+<div id="wrap">
+  <canvas id="board" width="300" height="600"></canvas>
+  <div id="side">
+    <div class="box"><h2>Score</h2><div class="v" id="score">0</div></div>
+    <div class="box"><h2>Lines</h2><div class="v" id="lines">0</div>
+      <div id="fireBar"><div id="fireFill"></div></div></div>
+    <div class="box"><h2>Level</h2><div class="v" id="level">1</div></div>
+    <div class="box" id="nextBox"><h2>Next</h2><canvas id="next" width="80" height="80"></canvas></div>
+    <div class="box" id="holdBox"><h2>Hold</h2><canvas id="hold" width="80" height="80"></canvas></div>
+  </div>
+</div>
+
+<div id="pad">
+  <button id="bLeft">&#9664;</button>
+  <button id="bRot">&#8635;</button>
+  <button id="bRight">&#9654;</button>
+  <button id="bDown">&#9660;</button>
+  <button id="bDrop">&#8681;&#8681;</button>
+  <button id="bHold">H</button>
+</div>
+
+<div id="over">
+  <h2 id="overTitle">Game Over</h2>
+  <p id="overText"></p>
+  <button class="big" id="overBtn">Play again</button>
+</div>
+
+<script>
+/* ============================================================
+   SOUND  -  every noise in this arcade is made by maths, not
+   by audio files. That's why the whole game is one small file.
+   Tap the music note in the top bar to turn sound off.
+   ============================================================ */
+const SFX = (function(){
+  let ctx = null, on = true;
+  try { on = localStorage.getItem('arcade_sound') !== 'off'; } catch(e){}
+
+  function ac(){
+    if(!ctx){
+      try { ctx = new (window.AudioContext || window.webkitAudioContext)(); }
+      catch(e){ return null; }
+    }
+    if(ctx.state === 'suspended') ctx.resume();
+    return ctx;
+  }
+
+  // one beep: f = start pitch, f2 = pitch to slide to, d = seconds
+  function tone(o){
+    if(!on) return;
+    const c = ac(); if(!c) return;
+    const t0 = c.currentTime + (o.delay || 0);
+    const osc = c.createOscillator(), g = c.createGain();
+    osc.type = o.type || 'square';
+    osc.frequency.setValueAtTime(o.f, t0);
+    if(o.f2) osc.frequency.exponentialRampToValueAtTime(Math.max(20, o.f2), t0 + o.d);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(o.v || 0.14, t0 + 0.006);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + o.d);
+    osc.connect(g); g.connect(c.destination);
+    osc.start(t0); osc.stop(t0 + o.d + 0.03);
+  }
+
+  // static-ish burst, good for thuds, kicks and explosions
+  function noise(o){
+    if(!on) return;
+    const c = ac(); if(!c) return;
+    const t0 = c.currentTime + (o.delay || 0);
+    const len = Math.floor(c.sampleRate * o.d);
+    const buf = c.createBuffer(1, len, c.sampleRate);
+    const data = buf.getChannelData(0);
+    for(let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = c.createBufferSource(); src.buffer = buf;
+    const flt = c.createBiquadFilter();
+    flt.type = o.hp ? 'highpass' : 'lowpass';
+    flt.frequency.setValueAtTime(o.cut || 1200, t0);
+    const g = c.createGain();
+    g.gain.setValueAtTime(o.v || 0.14, t0);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + o.d);
+    src.connect(flt); flt.connect(g); g.connect(c.destination);
+    src.start(t0);
+  }
+
+  // a little run of notes
+  function seq(notes, type, step, d, v){
+    notes.forEach((f, i) => tone({ f, d: d || 0.10, type: type || 'triangle', delay: i * (step || 0.07), v: v || 0.13 }));
+  }
+
+  const LIB = {
+    click:  () => tone({ f:660, d:.04, v:.10 }),
+    move:   () => tone({ f:300, d:.03, v:.06 }),
+    rotate: () => tone({ f:460, f2:600, d:.05, v:.09 }),
+    lock:   () => tone({ f:150, d:.06, type:'triangle', v:.12 }),
+    drop:   () => { tone({ f:260, f2:70, d:.12, type:'sawtooth', v:.12 }); noise({ d:.06, cut:900, v:.10 }); },
+    hold:   () => tone({ f:520, f2:400, d:.07, type:'triangle' }),
+
+    // line clears get brighter the more lines you take at once
+    clear1: () => seq([523, 784], 'triangle', .06, .10),
+    clear2: () => seq([523, 659, 880], 'triangle', .055, .10),
+    clear3: () => seq([523, 659, 880, 1047], 'triangle', .05, .10),
+    clear4: () => seq([523, 659, 880, 1047, 1319], 'square', .05, .12, .15),
+
+    bomb:   () => { noise({ d:.42, cut:700, v:.24 }); tone({ f:180, f2:35, d:.42, type:'sawtooth', v:.18 }); },
+    eat:    () => tone({ f:520, f2:820, d:.08, type:'square', v:.12 }),
+    gold:   () => seq([784, 988, 1319], 'square', .055, .09, .13),
+    die:    () => { tone({ f:320, f2:60, d:.55, type:'sawtooth', v:.16 }); noise({ d:.3, cut:500, v:.12, delay:.05 }); },
+
+    place:  () => tone({ f:340, f2:420, d:.05, type:'triangle', v:.10 }),
+    bad:    () => { tone({ f:200, d:.10, type:'square', v:.12 }); tone({ f:150, d:.14, type:'square', v:.12, delay:.09 }); },
+    hint:   () => seq([880, 1175], 'sine', .06, .09, .12),
+
+    kick:   () => { noise({ d:.05, cut:2200, hp:true, v:.16 }); tone({ f:190, f2:110, d:.07, type:'triangle', v:.14 }); },
+    dash:   () => tone({ f:200, f2:900, d:.18, type:'sawtooth', v:.13 }),
+    bounce: () => tone({ f:420, d:.03, v:.07 }),
+    goal:   () => seq([659, 784, 1047], 'square', .09, .14, .15),
+    shoot:  () => tone({ f:300, f2:720, d:.06, type:'square', v:.10 }),
+    pop:    () => tone({ f:700, f2:1300, d:.07, type:'sine', v:.14 }),
+    fall:   () => tone({ f:600, f2:180, d:.20, type:'sine', v:.10 }),
+    combo:  () => seq([880, 1175, 1568], 'sine', .05, .08, .13),
+
+    win:    () => seq([523, 659, 784, 1047, 1319], 'square', .10, .16, .15),
+    lose:   () => seq([392, 330, 262], 'sawtooth', .13, .22, .13),
+    start:  () => seq([523, 784], 'square', .07, .09, .11)
+  };
+
+  // pitch-shifted pop, so a long chain of pops climbs the scale
+  function popAt(n){
+    if(!on) return;
+    const base = 620 * Math.pow(1.09, Math.min(n, 14));
+    tone({ f: base, f2: base * 1.9, d:.07, type:'sine', v:.14 });
+  }
+
+  const api = {
+    play(name){ const f = LIB[name]; if(f) f(); },
+    popAt,
+    get on(){ return on; },
+    unlock(){ ac(); },
+    toggle(){
+      on = !on;
+      try { localStorage.setItem('arcade_sound', on ? 'on' : 'off'); } catch(e){}
+      if(on) LIB.click();
+      return on;
+    }
+  };
+
+  // browsers only allow sound after the player touches something
+  const wake = () => api.unlock();
+  window.addEventListener('pointerdown', wake, { once:false });
+  window.addEventListener('keydown', wake, { once:false });
+
+  // hook up the toggle button in the top bar, if this page has one
+  function mount(){
+    const btn = document.getElementById('sndBtn');
+    if(!btn) return;
+    const paint = () => {
+      btn.textContent = on ? '♪ ON' : '♪ OFF';
+      btn.classList.toggle('muted', !on);
+      btn.setAttribute('aria-label', on ? 'Sound is on' : 'Sound is off');
+    };
+    btn.addEventListener('click', () => { api.unlock(); api.toggle(); paint(); });
+    paint();
+  }
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount);
+  else mount();
+
+  return api;
+})();
+
+/* ============================================================
+   BLOCK DROP  -  a Tetris variant for Stella & Dad
+   The twist: every 10 lines you clear, you earn a FIREBOMB.
+   It drops as a single glowing block and blows a 3x3 hole.
+   ============================================================ */
+
+/* ---------- TWEAK ME ---------- */
+const COLS = 10;          // board width in cells
+const ROWS = 20;          // board height in cells
+const START_SPEED = 800;  // ms per drop step at level 1 (bigger = slower)
+const SPEED_STEP  = 65;   // how much faster each level gets
+const LINES_PER_LEVEL = 10;
+const LINES_PER_FIREBOMB = 10;
+/* ------------------------------ */
+
+const COLORS = {
+  I:'#39e6ff', J:'#4d7cff', L:'#ff9f2f', O:'#ffd93d',
+  S:'#4ade80', T:'#c084fc', Z:'#ff5d73', B:'#ff7a2f'
+};
+
+// Each shape is drawn on its own little grid so rotation is easy.
+const SHAPES = {
+  I:[[0,0,0,0],[1,1,1,1],[0,0,0,0],[0,0,0,0]],
+  J:[[1,0,0],[1,1,1],[0,0,0]],
+  L:[[0,0,1],[1,1,1],[0,0,0]],
+  O:[[1,1],[1,1]],
+  S:[[0,1,1],[1,1,0],[0,0,0]],
+  T:[[0,1,0],[1,1,1],[0,0,0]],
+  Z:[[1,1,0],[0,1,1],[0,0,0]],
+  B:[[1]]                       // the Firebomb - one single cell
+};
+
+const cv = document.getElementById('board'), ctx = cv.getContext('2d');
+const nextCv = document.getElementById('next'), nctx = nextCv.getContext('2d');
+const holdCv = document.getElementById('hold'), hctx = holdCv.getContext('2d');
+let CELL = cv.width / COLS;
+
+let grid, cur, nextQueue, holdPiece, canHold;
+let score, lines, level, bombCredit, dropTimer, lastTime, running, over, paused;
+
+function emptyGrid(){
+  return Array.from({length:ROWS}, () => Array(COLS).fill(null));
+}
+
+// 7-bag randomiser: you get all 7 pieces before any repeats. Feels fair.
+let bag = [];
+function nextType(){
+  if(bag.length === 0){
+    bag = ['I','J','L','O','S','T','Z'];
+    for(let i = bag.length - 1; i > 0; i--){
+      const j = Math.floor(Math.random() * (i + 1));
+      [bag[i], bag[j]] = [bag[j], bag[i]];
+    }
+  }
+  return bag.pop();
+}
+
+function makePiece(type){
+  const shape = SHAPES[type].map(r => r.slice());
+  return { type, shape, x: Math.floor((COLS - shape[0].length) / 2), y: type === 'I' ? -1 : 0 };
+}
+
+function spawn(){
+  // If we've earned a firebomb, drop it instead of a normal piece.
+  let type;
+  if(bombCredit > 0){ bombCredit--; type = 'B'; }
+  else { type = nextQueue.shift(); nextQueue.push(nextType()); }
+  cur = makePiece(type);
+  canHold = true;
+  if(collides(cur.shape, cur.x, cur.y)) gameOver();
+}
+
+function collides(shape, px, py){
+  for(let y = 0; y < shape.length; y++){
+    for(let x = 0; x < shape[y].length; x++){
+      if(!shape[y][x]) continue;
+      const gx = px + x, gy = py + y;
+      if(gx < 0 || gx >= COLS || gy >= ROWS) return true;
+      if(gy >= 0 && grid[gy][gx]) return true;
+    }
+  }
+  return false;
+}
+
+function rotate(shape, dir){
+  const n = shape.length;
+  const out = Array.from({length:n}, () => Array(n).fill(0));
+  for(let y = 0; y < n; y++) for(let x = 0; x < n; x++){
+    if(dir > 0) out[x][n - 1 - y] = shape[y][x];
+    else        out[n - 1 - x][y] = shape[y][x];
+  }
+  return out;
+}
+
+function tryRotate(dir){
+  if(cur.type === 'O' || cur.type === 'B') return;
+  const r = rotate(cur.shape, dir);
+  // wall kicks: if the rotation hits something, nudge sideways and retry
+  for(const kick of [0, -1, 1, -2, 2]){
+    if(!collides(r, cur.x + kick, cur.y)){ cur.shape = r; cur.x += kick; SFX.play('rotate'); return; }
+  }
+}
+
+function move(dx){
+  if(!collides(cur.shape, cur.x + dx, cur.y)){ cur.x += dx; SFX.play('move'); }
+}
+
+function softDrop(){
+  if(!collides(cur.shape, cur.x, cur.y + 1)){ cur.y++; score += 1; refresh(); }
+  else lock();
+}
+
+function hardDrop(){
+  let d = 0;
+  while(!collides(cur.shape, cur.x, cur.y + 1)){ cur.y++; d++; }
+  score += d * 2;
+  SFX.play('drop');
+  lock();
+}
+
+function doHold(){
+  if(!canHold || cur.type === 'B') return;
+  const stash = holdPiece;
+  holdPiece = cur.type;
+  if(stash){ cur = makePiece(stash); }
+  else { cur = makePiece(nextQueue.shift()); nextQueue.push(nextType()); }
+  canHold = false;
+  SFX.play('hold');
+  drawHold();
+  drawNext();
+}
+
+function lock(){
+  if(cur.type === 'B'){ explode(); return; }
+  for(let y = 0; y < cur.shape.length; y++)
+    for(let x = 0; x < cur.shape[y].length; x++)
+      if(cur.shape[y][x]){
+        const gy = cur.y + y;
+        if(gy < 0){ gameOver(); return; }
+        grid[gy][cur.x + x] = cur.type;
+      }
+  SFX.play('lock');
+  clearLines();
+  spawn();
+  drawNext();
+}
+
+// The Firebomb: wipes a 3x3 chunk wherever it lands.
+function explode(){
+  const cx = cur.x, cy = cur.y;
+  for(let y = cy - 1; y <= cy + 1; y++)
+    for(let x = cx - 1; x <= cx + 1; x++)
+      if(y >= 0 && y < ROWS && x >= 0 && x < COLS) grid[y][x] = null;
+  score += 150;
+  SFX.play('bomb');
+  flash();
+  clearLines();
+  spawn();
+  drawNext();
+}
+
+function clearLines(){
+  let cleared = 0;
+  for(let y = ROWS - 1; y >= 0; y--){
+    if(grid[y].every(c => c)){
+      grid.splice(y, 1);
+      grid.unshift(Array(COLS).fill(null));
+      cleared++; y++;
+    }
+  }
+  if(cleared){
+    SFX.play('clear' + Math.min(cleared, 4));
+    const table = [0, 100, 300, 500, 800];
+    score += table[cleared] * level;
+    const before = Math.floor(lines / LINES_PER_FIREBOMB);
+    lines += cleared;
+    bombCredit += Math.floor(lines / LINES_PER_FIREBOMB) - before;
+    level = Math.floor(lines / LINES_PER_LEVEL) + 1;
+  }
+  refresh();
+}
+
+/* ---------- drawing ---------- */
+function roundRect(c, x, y, w, h, r){
+  c.beginPath();
+  c.moveTo(x + r, y);
+  c.arcTo(x + w, y, x + w, y + h, r);
+  c.arcTo(x + w, y + h, x, y + h, r);
+  c.arcTo(x, y + h, x, y, r);
+  c.arcTo(x, y, x + w, y, r);
+  c.closePath();
+}
+
+function cell(c, x, y, type, size, alpha){
+  const col = COLORS[type];
+  c.globalAlpha = alpha === undefined ? 1 : alpha;
+  c.fillStyle = col;
+  c.shadowColor = col; c.shadowBlur = size * 0.45;
+  roundRect(c, x + 1, y + 1, size - 2, size - 2, size * 0.22);
+  c.fill();
+  c.shadowBlur = 0;
+  c.globalAlpha = (alpha === undefined ? 1 : alpha) * 0.35;
+  c.fillStyle = '#ffffff';
+  roundRect(c, x + 3, y + 3, size - 6, (size - 6) * 0.35, size * 0.16);
+  c.fill();
+  c.globalAlpha = 1;
+}
+
+function draw(){
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  // faint grid
+  ctx.strokeStyle = 'rgba(255,255,255,.045)'; ctx.lineWidth = 1;
+  for(let x = 1; x < COLS; x++){ ctx.beginPath(); ctx.moveTo(x*CELL,0); ctx.lineTo(x*CELL,cv.height); ctx.stroke(); }
+  for(let y = 1; y < ROWS; y++){ ctx.beginPath(); ctx.moveTo(0,y*CELL); ctx.lineTo(cv.width,y*CELL); ctx.stroke(); }
+
+  for(let y = 0; y < ROWS; y++)
+    for(let x = 0; x < COLS; x++)
+      if(grid[y][x]) cell(ctx, x*CELL, y*CELL, grid[y][x], CELL);
+
+  if(cur){
+    // ghost - shows where the piece will land
+    let gy = cur.y;
+    while(!collides(cur.shape, cur.x, gy + 1)) gy++;
+    for(let y = 0; y < cur.shape.length; y++)
+      for(let x = 0; x < cur.shape[y].length; x++)
+        if(cur.shape[y][x] && gy + y >= 0)
+          cell(ctx, (cur.x+x)*CELL, (gy+y)*CELL, cur.type, CELL, 0.20);
+    for(let y = 0; y < cur.shape.length; y++)
+      for(let x = 0; x < cur.shape[y].length; x++)
+        if(cur.shape[y][x] && cur.y + y >= 0)
+          cell(ctx, (cur.x+x)*CELL, (cur.y+y)*CELL, cur.type, CELL);
+  }
+}
+
+function drawMini(c, type){
+  c.clearRect(0, 0, c.canvas.width, c.canvas.height);
+  if(!type) return;
+  const s = SHAPES[type], size = 16;
+  const w = s[0].length * size, h = s.length * size;
+  const ox = (c.canvas.width - w) / 2, oy = (c.canvas.height - h) / 2;
+  for(let y = 0; y < s.length; y++)
+    for(let x = 0; x < s[y].length; x++)
+      if(s[y][x]) cell(c, ox + x*size, oy + y*size, type, size);
+}
+function drawNext(){ drawMini(nctx, bombCredit > 0 ? 'B' : nextQueue[0]); }
+function drawHold(){ drawMini(hctx, holdPiece); }
+
+function flash(){
+  cv.style.transition = 'none';
+  cv.style.boxShadow = '0 0 90px rgba(255,122,47,.9), inset 0 0 90px rgba(255,122,47,.5)';
+  setTimeout(() => {
+    cv.style.transition = 'box-shadow .5s';
+    cv.style.boxShadow = '';
+  }, 60);
+}
+
+function refresh(){
+  document.getElementById('score').textContent = score;
+  document.getElementById('lines').textContent = lines;
+  document.getElementById('level').textContent = level;
+  const pct = ((lines % LINES_PER_FIREBOMB) / LINES_PER_FIREBOMB) * 100;
+  document.getElementById('fireFill').style.width = (bombCredit > 0 ? 100 : pct) + '%';
+}
+
+/* ---------- loop ---------- */
+function tick(t){
+  if(!running) return;
+  if(!lastTime) lastTime = t;
+  const dt = t - lastTime; lastTime = t;
+  if(!paused && !over){
+    dropTimer += dt;
+    const speed = Math.max(90, START_SPEED - (level - 1) * SPEED_STEP);
+    if(dropTimer > speed){
+      dropTimer = 0;
+      if(!collides(cur.shape, cur.x, cur.y + 1)) cur.y++;
+      else lock();
+    }
+    draw();
+  }
+  requestAnimationFrame(tick);
+}
+
+function gameOver(){
+  over = true; running = false;
+  SFX.play('lose');
+  document.getElementById('overTitle').textContent = 'Game Over';
+  document.getElementById('overText').textContent =
+    'Score ' + score + '  -  ' + lines + ' lines  -  level ' + level;
+  document.getElementById('over').style.display = 'flex';
+}
+
+function start(){
+  grid = emptyGrid();
+  bag = [];
+  nextQueue = [nextType(), nextType(), nextType()];
+  holdPiece = null; canHold = true;
+  score = 0; lines = 0; level = 1; bombCredit = 0;
+  dropTimer = 0; lastTime = 0; over = false; paused = false; running = true;
+  document.getElementById('over').style.display = 'none';
+  document.getElementById('pauseBtn').textContent = 'Pause';
+  spawn(); refresh(); drawNext(); drawHold(); draw();
+  requestAnimationFrame(tick);
+}
+
+/* ---------- controls ---------- */
+const keymap = {
+  ArrowLeft:  () => move(-1),
+  ArrowRight: () => move(1),
+  ArrowDown:  () => softDrop(),
+  ArrowUp:    () => tryRotate(1),
+  KeyZ:       () => tryRotate(-1),
+  KeyX:       () => tryRotate(1),
+  Space:      () => hardDrop(),
+  KeyC:       () => doHold(),
+  ShiftLeft:  () => doHold()
+};
+document.addEventListener('keydown', e => {
+  if(e.code === 'KeyP' || e.code === 'Escape'){ togglePause(); return; }
+  if(over || paused) return;
+  const fn = keymap[e.code];
+  if(fn){ e.preventDefault(); fn(); draw(); }
+});
+
+function togglePause(){
+  if(over) return;
+  paused = !paused;
+  document.getElementById('pauseBtn').textContent = paused ? 'Resume' : 'Pause';
+  if(paused){
+    ctx.fillStyle = 'rgba(7,6,15,.8)'; ctx.fillRect(0,0,cv.width,cv.height);
+    ctx.fillStyle = '#e8e4ff'; ctx.font = 'bold 26px Trebuchet MS'; ctx.textAlign = 'center';
+    ctx.fillText('PAUSED', cv.width/2, cv.height/2);
+  }
+}
+document.getElementById('pauseBtn').onclick = togglePause;
+document.getElementById('overBtn').onclick = start;
+
+function hook(id, fn, repeat){
+  const el = document.getElementById(id);
+  let timer = null, held = null;
+  const go = e => {
+    e.preventDefault();
+    if(over || paused) return;
+    fn(); draw();
+    if(repeat){
+      timer = setTimeout(() => { held = setInterval(() => { fn(); draw(); }, 60); }, 220);
+    }
+  };
+  const stop = () => { clearTimeout(timer); clearInterval(held); };
+  el.addEventListener('touchstart', go, {passive:false});
+  el.addEventListener('touchend', stop);
+  el.addEventListener('touchcancel', stop);
+  el.addEventListener('mousedown', go);
+  el.addEventListener('mouseup', stop);
+  el.addEventListener('mouseleave', stop);
+}
+hook('bLeft', () => move(-1), true);
+hook('bRight', () => move(1), true);
+hook('bRot', () => tryRotate(1), false);
+hook('bDown', () => softDrop(), true);
+hook('bDrop', () => hardDrop(), false);
+hook('bHold', () => doHold(), false);
+
+// swipe on the board itself
+let sx = 0, sy = 0, st = 0;
+cv.addEventListener('touchstart', e => {
+  sx = e.touches[0].clientX; sy = e.touches[0].clientY; st = Date.now();
+}, {passive:true});
+cv.addEventListener('touchend', e => {
+  const dx = e.changedTouches[0].clientX - sx, dy = e.changedTouches[0].clientY - sy;
+  if(over || paused) return;
+  if(Math.abs(dx) < 24 && Math.abs(dy) < 24 && Date.now() - st < 250){ tryRotate(1); }
+  else if(Math.abs(dy) > Math.abs(dx) && dy > 40){ hardDrop(); }
+  else if(Math.abs(dx) > 30){ move(dx > 0 ? 1 : -1); }
+  draw();
+}, {passive:true});
+
+function fit(){
+  const avail = Math.min(window.innerHeight - (window.innerWidth < 760 ? 250 : 70), 640);
+  const h = Math.max(300, avail);
+  const c = Math.floor(h / ROWS);
+  cv.height = c * ROWS; cv.width = c * COLS; CELL = c;
+  if(grid) draw();
+}
+window.addEventListener('resize', fit);
+fit();
+start();
+</script>
+</body>
+</html>
