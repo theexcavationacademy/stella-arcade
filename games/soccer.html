@@ -626,11 +626,68 @@ function drawPlayer(p, col){
   ctx.restore();
 }
 
-/* ---------- networking (phone to phone) ---------- */
-let peer = null, conn = null, netTick = 0;
+/* ============================================================
+   NETWORKING (phone to phone)
+
+   Two phones talk directly to each other over WebRTC. To find
+   each other they need help:
+
+   STUN  - "what does my address look like from outside?"
+           Enough when both players are on the same wifi.
+   TURN  - a relay that both sides can reach when a direct link
+           is impossible. Needed far more often than people
+           expect: mobile networks and a lot of home routers use
+           a kind of NAT that STUN alone cannot get through.
+
+   Without TURN this works perfectly between two devices in the
+   same house and fails the moment someone is on mobile data.
+   That is exactly the bug we hit.
+   ============================================================ */
+let peer = null, conn = null, netTick = 0, connectTimer = null, wakeLock = null;
 const PREFIX = 'stelladad-';
+
+/* ---------- TWEAK ME: who helps the phones find each other ---------- */
+const PEER_CONFIG = {
+  config: {
+    iceServers: [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' },
+      // free public relay - fine for a family game, not for a business
+      { urls: 'turn:openrelay.metered.ca:80',
+        username: 'openrelayproject', credential: 'openrelayproject' },
+      { urls: 'turn:openrelay.metered.ca:443',
+        username: 'openrelayproject', credential: 'openrelayproject' },
+      { urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+        username: 'openrelayproject', credential: 'openrelayproject' }
+    ],
+    iceCandidatePoolSize: 4
+  },
+  debug: 0
+};
+const CONNECT_TIMEOUT = 22000;   // ms before we admit it is not going to happen
+/* -------------------------------------------------------------------- */
+
 const setConn = t => { document.getElementById('conn').textContent = t; };
 const netMsg = t => { document.getElementById('netMsg').textContent = t; };
+
+/* Stop the phone sleeping while it is hosting - a locked screen
+   kills the connection and the other player just sees it hang. */
+async function keepAwake(){
+  try { if(navigator.wakeLock) wakeLock = await navigator.wakeLock.request('screen'); } catch(e){}
+}
+function letSleep(){
+  try { if(wakeLock) wakeLock.release(); } catch(e){}
+  wakeLock = null;
+}
+document.addEventListener('visibilitychange', () => {
+  if(document.visibilityState === 'visible' && (state.mode === 'host' || state.mode === 'guest')) keepAwake();
+});
+
+function startTimeout(msg){
+  clearTimeout(connectTimer);
+  connectTimer = setTimeout(() => { if(!(conn && conn.open)) netMsg(msg); }, CONNECT_TIMEOUT);
+}
+function clearTimeoutMsg(){ clearTimeout(connectTimer); connectTimer = null; }
 
 function makeCode(){
   const abc = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -642,22 +699,40 @@ function makeCode(){
 function peerAvailable(){ return typeof Peer !== 'undefined'; }
 
 function host(){
-  if(!peerAvailable()) return netMsg('Online play needs the internet - use the hosted version of this page.');
+  if(!peerAvailable()) return netMsg('Online play needs the internet - open the hosted version of this page.');
   const code = makeCode();
   document.getElementById('code').textContent = code;
-  netMsg('Waiting for the other phone...');
-  peer = new Peer(PREFIX + code);
-  peer.on('open', () => netMsg('Room ' + code + ' is open. Waiting...'));
-  peer.on('error', e => netMsg('Trouble: ' + e.type + '. Try Back, then Host again.'));
+  netMsg('Opening room...');
+  keepAwake();
+  peer = new Peer(PREFIX + code, PEER_CONFIG);
+
+  peer.on('open', () => {
+    netMsg('Room ' + code + ' is open. Keep this screen on.');
+    startTimeout('Still waiting. Make sure they typed ' + code + ' exactly, and that this screen has stayed on.');
+  });
+
+  peer.on('error', e => {
+    if(e.type === 'unavailable-id'){
+      netMsg('That code was already taken. Tap Back and host again.');
+    } else if(e.type === 'network' || e.type === 'server-error'){
+      netMsg('Cannot reach the matchmaking server. Check your internet and try again.');
+    } else {
+      netMsg('Problem: ' + e.type + '. Tap Back, then Host again.');
+    }
+  });
+
   peer.on('connection', c => {
     conn = c;
+    clearTimeoutMsg();
+    netMsg('Someone is joining...');
     c.on('open', () => {
       netMsg('Connected!');
       setConn('online');
       startGame('host');
     });
     c.on('data', d => { if(d.t === 'in'){ input[2].x = d.x; input[2].y = d.y; input[2].dash = d.d; } });
-    c.on('close', () => { setConn('disconnected'); showMenu(); });
+    c.on('close', () => { setConn('they left'); letSleep(); showMenu(); });
+    c.on('error', () => { setConn('connection lost'); });
   });
 }
 
@@ -665,11 +740,14 @@ function join(){
   if(!peerAvailable()) return netMsg('Online play needs the internet - use the hosted version of this page.');
   const code = (document.getElementById('joinInput').value || '').toUpperCase().trim();
   if(code.length !== 4) return netMsg('Type the 4 character code.');
-  netMsg('Connecting to ' + code + '...');
-  peer = new Peer();
+  netMsg('Looking for room ' + code + '...');
+  keepAwake();
+  peer = new Peer(undefined, PEER_CONFIG);
+  startTimeout('Could not reach them. Usually that means one of you is on a different network - try both on the same wifi, or ask them to host again.');
   peer.on('open', () => {
-    conn = peer.connect(PREFIX + code);
-    conn.on('open', () => { netMsg('Connected!'); setConn('online'); startGame('guest'); });
+    conn = peer.connect(PREFIX + code, { reliable: false });
+    netMsg('Found the room. Connecting...');
+    conn.on('open', () => { clearTimeoutMsg(); netMsg('Connected!'); setConn('online'); startGame('guest'); });
     conn.on('data', d => {
       if(d.t === 's'){
         state.p1.x = d.a[0]; state.p1.y = d.a[1]; state.p1.fx = d.a[2]; state.p1.fy = d.a[3]; state.p1.charge = d.a[4];
@@ -679,10 +757,19 @@ function join(){
       } else if(d.t === 'over'){ state.s1 = d.s1; state.s2 = d.s2; finish(); }
       else if(d.t === 'again'){ document.getElementById('result').style.display = 'none'; state.over = false; state.s1 = state.s2 = 0; reset(); }
     });
-    conn.on('close', () => { setConn('disconnected'); showMenu(); });
-    conn.on('error', () => netMsg('Could not connect. Check the code.'));
+    conn.on('close', () => { setConn('they left'); letSleep(); showMenu(); });
+    conn.on('error', () => netMsg('Lost the connection. Tap Back and try again.'));
   });
-  peer.on('error', e => netMsg('Trouble: ' + e.type + '. Check the code and try again.'));
+  peer.on('error', e => {
+    clearTimeoutMsg();
+    if(e.type === 'peer-unavailable'){
+      netMsg('Nobody is hosting ' + code + '. Check the code, and make sure they are still on the waiting screen.');
+    } else if(e.type === 'network' || e.type === 'server-error'){
+      netMsg('Cannot reach the matchmaking server. Check your internet and try again.');
+    } else {
+      netMsg('Problem: ' + e.type + '. Tap Back and try again.');
+    }
+  });
 }
 
 function sendState(){
@@ -740,6 +827,8 @@ function showMenu(){
   document.getElementById('codeBox').style.display = 'none';
   document.querySelectorAll('#menu .big').forEach(b => { if(b.id !== 'btnBack') b.style.display = ''; });
   document.getElementById('joinInput')?.remove();
+  clearTimeoutMsg();
+  letSleep();
   if(peer){ try{ peer.destroy(); }catch(e){} peer = null; conn = null; }
   setConn('');
 }
