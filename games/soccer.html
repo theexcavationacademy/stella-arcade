@@ -93,7 +93,9 @@ body.touch .stick,body.touch .act{display:flex}
 <div id="menu">
   <h2>Soccer Duel</h2>
   <p>You control whoever is nearest the ball. Run into the ball to take it,
-     PASS to the player the arrow is pointing at, SHOOT to have a go.</p>
+     PASS to the player the arrow is pointing at, SHOOT to have a go.
+     Without the ball the same button becomes CHECK: it closes the man
+     down and knocks the ball loose.</p>
   <div class="row">
     <button class="pill on" data-size="1">1 v 1</button>
     <button class="pill" data-size="3">3 v 3</button>
@@ -304,6 +306,11 @@ const WIN_SCORE = 5;
 
 const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
 let scale = 1, offX = 0, offY = 0, rotated = false;
+/* On a phone the pitch is turned so YOUR goal is at the bottom and you
+   attack up the screen. flip is true when the device is playing the
+   team that attacks towards x = 0. The drawing and the thumbstick both
+   read this one flag - when they disagreed, up was down. */
+let flip = false;
 
 const S = {
   mode: 'solo',        // solo | local | host | guest
@@ -318,7 +325,7 @@ const S = {
 };
 
 function mkPlayer(team, x, y, index){
-  return { team, index, x, y, vx:0, vy:0, fx: team.side, fy:0, flash:0 };
+  return { team, index, x, y, vx:0, vy:0, fx: team.side, fy:0, flash:0, checkCool:0 };
 }
 
 function formation(side, n){
@@ -396,8 +403,15 @@ function readInput(){
   let bPass = !!k.Period || !!k.Enter, bShoot = !!k.Slash || !!k.ShiftRight;
 
   // the thumbstick drives whichever team this device is playing
+  // turn screen-space stick into pitch-space, the exact inverse of
+  // whatever pitchTransform() just drew
   let tx = touch.x, ty = touch.y;
-  if(rotated){ const rx = -ty, ry = tx; tx = rx; ty = ry; }
+  if(rotated){
+    if(flip){ const rx = ty, ry = -tx; tx = rx; ty = ry; }
+    else     { const rx = -ty, ry = tx; tx = rx; ty = ry; }
+  } else if(flip){
+    tx = -tx; ty = -ty;
+  }
 
   const mine = (S.mode === 'guest') ? 1 : 0;
   const set = (i, x, y, pass, shoot) => {
@@ -450,8 +464,12 @@ function separate(){
       const a = all[i], b = all[j];
       const dx = b.x - a.x, dy = b.y - a.y;
       const d = Math.hypot(dx, dy);
-      if(d === 0 || d >= P_R * 2) continue;
-      const nx = dx / d, ny = dy / d, over = (P_R * 2 - d) / 2;
+      // team-mates keep a soft cushion so a team never collapses into
+      // one blob; opponents only get the hard body collision
+      const min = (a.team === b.team) ? P_R * 4.6 : P_R * 2;
+      if(d === 0 || d >= min) continue;
+      const soft = (a.team === b.team) ? 0.16 : 1;
+      const nx = dx / d, ny = dy / d, over = (min - d) / 2 * soft;
       a.x -= nx * over; a.y -= ny * over;
       b.x += nx * over; b.y += ny * over;
     }
@@ -598,6 +616,81 @@ function doShoot(p){
   SFX.play('dash');
 }
 
+/* ---------- finding space ----------
+   Soccer is geometry. A team-mate standing on top of the ball is
+   worth nothing - the useful one is the man in a lane of his own,
+   ahead of the ball, with nobody near him. This works out where
+   that is: his own lane, pushed up the pitch, then shoved away
+   from the nearest opponent and away from his own team-mates. */
+const LANE_GAP = 250;          // how far apart the lanes are, in units
+const SPREAD_R = 230;          // team-mates start avoiding each other inside this
+
+function supportSpot(m, team){
+  const lanes = formation(team.side, S.teamSize).map(f => f[1]);
+  let ty = lanes[m.index] * 0.62 + S.ball.y * 0.38;
+
+  // ahead of the ball, but not offside-daft and not in the keeper's lap
+  let tx = S.ball.x + team.side * 210;
+  tx = Math.max(140, Math.min(W - 140, tx));
+
+  // hold your own lane relative to the ball's lane
+  const off = (lanes[m.index] - H / 2);
+  ty = S.ball.y + off * 0.85;
+
+  // get away from your own team-mates - two men in one place is one man
+  for(const o of team.players){
+    if(o === m) continue;
+    const dy = ty - o.y, dx = tx - o.x;
+    const d = Math.hypot(dx, dy);
+    if(d < SPREAD_R && d > 0.001){
+      const push = (SPREAD_R - d) * 0.75;
+      tx += (dx / d) * push; ty += (dy / d) * push;
+    }
+  }
+
+  // and away from whoever is marking you
+  const foes = S.teams.find(t => t !== team);
+  if(foes) for(const o of foes.players){
+    const dy = ty - o.y, dx = tx - o.x;
+    const d = Math.hypot(dx, dy);
+    if(d < 130 && d > 0.001){
+      tx += (dx / d) * (130 - d); ty += (dy / d) * (130 - d);
+    }
+  }
+
+  return [Math.max(90, Math.min(W - 90, tx)), Math.max(70, Math.min(H - 70, ty))];
+}
+
+/* ---------- CHECK ----------
+   With the ball, the right thumb passes. Without it, the same button
+   closes the man down: a short burst at the ball and, if you get
+   there, the ball comes loose. */
+const CHECK_BURST = 8.2;
+const CHECK_RANGE = 96;
+
+function doCheck(p){
+  if(p.checkCool > 0) return;
+  p.checkCool = 26;
+  const b = S.ball;
+  const dx = b.x - p.x, dy = b.y - p.y;
+  const d = Math.hypot(dx, dy) || 1;
+  p.vx += (dx / d) * CHECK_BURST;
+  p.vy += (dy / d) * CHECK_BURST;
+  p.fx = dx / d; p.fy = dy / d;
+  p.flash = 10;
+  SFX.play('dash');
+  // a clean challenge knocks it off whoever has it
+  const c = S.carrier;
+  if(c && c.team !== p.team && d < CHECK_RANGE){
+    b.freeT = 20;
+    S.carrier = null;
+    b.vx = (dx / d) * 9 + (Math.random() * 4 - 2);
+    b.vy = (dy / d) * 9 + (Math.random() * 4 - 2);
+    c.flash = 10;
+    SFX.play('kick');
+  }
+}
+
 /* ---------- the computer ---------- */
 const AI_SKILL = 0.62;
 function aiTeam(team, dt){
@@ -614,12 +707,9 @@ function aiTeam(team, dt){
         else if(team.players.length > 1 && Math.random() < 0.018) doPass(p);
       }
     } else {
-      // hold a supporting position up the pitch
-      const homeY = formation(team.side, S.teamSize)[p.index][1];
-      const tx = S.ball.x * 0.45 + (team.side > 0 ? W * 0.45 : W * 0.55) * 0.55;
-      const ty = homeY * 0.55 + S.ball.y * 0.45;
+      const [tx, ty] = supportSpot(p, team);
       const dx = tx - p.x, dy = ty - p.y, d = Math.hypot(dx, dy) || 1;
-      drivePlayer(p, { x: d > 40 ? dx / d * 0.6 : 0, y: d > 40 ? dy / d * 0.6 : 0 }, dt);
+      drivePlayer(p, { x: d > 34 ? dx / d * 0.66 : 0, y: d > 34 ? dy / d * 0.66 : 0 }, dt);
     }
   }
 }
@@ -643,15 +733,15 @@ function simulate(dt){
     if(S.carrier === p){
       if(inp.passHit) doPass(p);
       else if(inp.shootHit) doShoot(p);
+    } else if(inp.passHit){
+      doCheck(p);
     }
-    // team-mates you are not steering hold shape
+    // team-mates you are not steering go and find space
     for(const m of team.players){
       if(m === p) continue;
-      const homeY = formation(team.side, S.teamSize)[m.index][1];
-      const tx = S.ball.x * 0.4 + (team.side > 0 ? W * 0.42 : W * 0.58) * 0.6;
-      const ty = homeY * 0.5 + S.ball.y * 0.5;
+      const [tx, ty] = supportSpot(m, team);
       const dx = tx - m.x, dy = ty - m.y, d = Math.hypot(dx, dy) || 1;
-      drivePlayer(m, { x: d > 45 ? dx / d * 0.62 : 0, y: d > 45 ? dy / d * 0.62 : 0 }, dt);
+      drivePlayer(m, { x: d > 34 ? dx / d * 0.72 : 0, y: d > 34 ? dy / d * 0.72 : 0 }, dt);
       driven.add(m);
     }
   }
@@ -663,10 +753,12 @@ function simulate(dt){
   }
   for(const t of S.teams) for(const p of t.players) if(!driven.has(p)) coast(p);
 
+  for(const t of S.teams) for(const p of t.players) if(p.checkCool > 0) p.checkCool--;
   separate();
   S.teams.forEach(t => driveKeeper(t.keeper));
   const scored = updateBall();
   S.passTarget = S.carrier ? passTargetFor(S.carrier) : null;
+  paintActionButton();
 
   if(scored){
     const team = S.teams.find(t => t.side === scored);
@@ -691,6 +783,8 @@ function fit(){
   cv.width = st.clientWidth * dpr;
   cv.height = st.clientHeight * dpr;
   rotated = cv.height > cv.width * 1.1;
+  // the guest phone is playing the team that attacks the other way
+  flip = (S.mode === 'guest');
   if(rotated){
     scale = Math.min(cv.height / W, cv.width / H);
     offX = (cv.width - H * scale) / 2;
@@ -705,12 +799,12 @@ addEventListener('resize', fit);
 addEventListener('orientationchange', () => setTimeout(fit, 250));
 
 function pitchTransform(){
+  ctx.setTransform(scale, 0, 0, scale, offX, offY);
   if(rotated){
-    ctx.setTransform(scale, 0, 0, scale, offX, offY);
-    ctx.translate(H, 0);
-    ctx.rotate(Math.PI / 2);
-  } else {
-    ctx.setTransform(scale, 0, 0, scale, offX, offY);
+    if(flip){ ctx.translate(H, 0); ctx.rotate(Math.PI / 2); }        // attacking -x: up the screen is x = 0
+    else     { ctx.translate(0, W); ctx.rotate(-Math.PI / 2); }      // attacking +x: up the screen is x = W
+  } else if(flip){
+    ctx.translate(W, H); ctx.rotate(Math.PI);
   }
 }
 
@@ -767,6 +861,20 @@ function drawPlayer(p, colour, isActive){
     ctx.globalAlpha = 1;
   }
   ctx.restore();
+}
+
+/* The right thumb does two jobs, so it says which one it is doing. */
+let btnMode = '';
+function paintActionButton(){
+  const b = document.getElementById('btnPass');
+  if(!b) return;
+  const myTeam = S.teams[S.mode === 'guest' ? 1 : 0];
+  const mine = myTeam && S.carrier && S.carrier.team === myTeam;
+  const want = mine ? 'PASS' : 'CHECK';
+  if(want === btnMode) return;
+  btnMode = want;
+  b.textContent = want;
+  b.style.background = mine ? 'rgba(57,167,255,.28)' : 'rgba(255,64,84,.46)';
 }
 
 /* the arrow that tells you who PASS will find */
@@ -1037,7 +1145,7 @@ function startGame(mode){
   document.getElementById('result').style.display = 'none';
   document.getElementById('hint').textContent =
     mode === 'local' ? 'Orange: WASD, J pass, K shoot   |   Blue: arrows, . pass, / shoot'
-                     : 'WASD or the stick. J / PASS to pass, K / SHOOT to shoot.';
+                     : 'WASD or the stick. Right thumb PASSES when you have the ball and CHECKS when you do not. SHOOT to have a go.';
   S.running = true;
   fit();
   SFX.unlock();
